@@ -26,7 +26,8 @@ const slugOrder = ['espetinhos', 'lanches', 'pratos', 'porcoes']
 
 function isPratoFeitoItem(item) {
   if (!item) return false
-  if (Number(item.is_prato_feito) === 1) return true
+  // API/SQLite pode mandar 1, "1", true; comparação solta cobre todos
+  if (item.is_prato_feito == 1 || item.is_prato_feito === true) return true
   const n = normalize(item.name)
   return n.includes('prato') && n.includes('feito')
 }
@@ -218,6 +219,13 @@ export default function PedirOnline() {
 
     const makeCombo = (id, name, emoji, products, discountPercent) => {
       if (products.some((p) => !p)) return null
+      // Índices no combo onde entra o mesmo item do "Prato Feito" do cardápio (não depende só de is_prato_feito no JSON)
+      const pfSlots = []
+      if (pratoFeito) {
+        products.forEach((p, i) => {
+          if (p && Number(p.id) === Number(pratoFeito.id)) pfSlots.push(i)
+        })
+      }
       const original = products.reduce((s, p) => s + Number(p.price || 0), 0)
       const rawDiscounted = Number((original * (1 - discountPercent / 100)).toFixed(2))
       const maxSavings = 8
@@ -229,6 +237,7 @@ export default function PedirOnline() {
         name,
         emoji,
         products,
+        pfSlots,
         description: 'Preço especial no combo para aumentar seu custo-benefício.',
         items: products.map((p) => p.name),
         originalPrice: original,
@@ -342,7 +351,9 @@ export default function PedirOnline() {
   }
 
   const requestAddCombo = (combo) => {
-    const pfIndices = combo.products.map((p, i) => i).filter((i) => isPratoFeitoItem(combo.products[i]))
+    const pfIndices = Array.isArray(combo.pfSlots) && combo.pfSlots.length > 0
+      ? combo.pfSlots
+      : combo.products.map((p, i) => i).filter((i) => isPratoFeitoItem(combo.products[i]))
     if (pfIndices.length === 0) {
       addComboInternal(combo, null)
       return
@@ -356,7 +367,9 @@ export default function PedirOnline() {
 
   const confirmComboModal = () => {
     if (!comboModal) return
-    const pfIndices = comboModal.products.map((p, i) => i).filter((i) => isPratoFeitoItem(comboModal.products[i]))
+    const pfIndices = Array.isArray(comboModal.pfSlots) && comboModal.pfSlots.length > 0
+      ? comboModal.pfSlots
+      : comboModal.products.map((p, i) => i).filter((i) => isPratoFeitoItem(comboModal.products[i]))
     for (const i of pfIndices) {
       const v = comboPfSelections[i]
       if (!v || !Number(v)) {
@@ -676,10 +689,12 @@ export default function PedirOnline() {
       )}
 
       {comboModal && (() => {
-        const pfIdx = comboModal.products.map((p, i) => i).filter((i) => isPratoFeitoItem(comboModal.products[i]))
+        const pfIdx = Array.isArray(comboModal.pfSlots) && comboModal.pfSlots.length > 0
+          ? comboModal.pfSlots
+          : comboModal.products.map((p, i) => i).filter((i) => isPratoFeitoItem(comboModal.products[i]))
         return (
           <div
-            className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 sm:items-center"
+            className="fixed inset-0 z-[100] flex items-end justify-center bg-black/45 sm:items-center"
             onClick={() => { setComboModal(null); setComboPfSelections({}) }}
           >
             <div className="w-full max-w-md rounded-t-3xl bg-white p-5 shadow-float sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
