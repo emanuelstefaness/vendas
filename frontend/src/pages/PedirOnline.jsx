@@ -24,6 +24,14 @@ const bySort = (a, b) => (a.sort_order || 0) - (b.sort_order || 0)
 
 const slugOrder = ['espetinhos', 'lanches', 'pratos', 'porcoes']
 
+function isPratoFeitoItem(item) {
+  if (!item) return false
+  // API/SQLite pode mandar 1, "1", true; comparação solta cobre todos
+  if (item.is_prato_feito == 1 || item.is_prato_feito === true) return true
+  const n = normalize(item.name)
+  return n.includes('prato') && n.includes('feito')
+}
+
 function getItemImageUrl(apiBase, itemName) {
   const fileName = IMAGE_FILE_BY_ITEM_NAME[normalize(itemName)]
   if (!fileName) return null
@@ -67,7 +75,7 @@ function ProductCard({ item, badges = [], highlight, onOpen }) {
   )
 }
 
-function ComboCard({ combo, onAddCombo }) {
+function ComboCard({ combo, onRequestAddCombo }) {
   return (
     <article className="rounded-2xl border border-amber-200 bg-combo p-4 shadow-card">
       <div className="mb-2 flex items-start justify-between gap-3">
@@ -87,7 +95,7 @@ function ComboCard({ combo, onAddCombo }) {
         </div>
         <button
           type="button"
-          onClick={() => onAddCombo(combo)}
+          onClick={() => onRequestAddCombo(combo)}
           className="rounded-xl bg-[hsl(var(--menu-primary))] px-4 py-3 font-bold text-white transition hover:brightness-95 active:scale-95"
         >
           Adicionar combo
@@ -109,6 +117,8 @@ export default function PedirOnline() {
   const [modalQty, setModalQty] = useState(1)
   const [modalObs, setModalObs] = useState('')
   const [modalPfEspetinhoId, setModalPfEspetinhoId] = useState('')
+  const [comboModal, setComboModal] = useState(null)
+  const [comboPfSelections, setComboPfSelections] = useState({})
   const [lastSuggestedAddedId, setLastSuggestedAddedId] = useState(null)
   const [cart, setCart] = useState([])
   const [activeCatId, setActiveCatId] = useState(null)
@@ -209,6 +219,13 @@ export default function PedirOnline() {
 
     const makeCombo = (id, name, emoji, products, discountPercent) => {
       if (products.some((p) => !p)) return null
+      // Índices no combo onde entra o mesmo item do "Prato Feito" do cardápio (não depende só de is_prato_feito no JSON)
+      const pfSlots = []
+      if (pratoFeito) {
+        products.forEach((p, i) => {
+          if (p && Number(p.id) === Number(pratoFeito.id)) pfSlots.push(i)
+        })
+      }
       const original = products.reduce((s, p) => s + Number(p.price || 0), 0)
       const rawDiscounted = Number((original * (1 - discountPercent / 100)).toFixed(2))
       const maxSavings = 8
@@ -220,6 +237,7 @@ export default function PedirOnline() {
         name,
         emoji,
         products,
+        pfSlots,
         description: 'Preço especial no combo para aumentar seu custo-benefício.',
         items: products.map((p) => p.name),
         originalPrice: original,
@@ -292,7 +310,7 @@ export default function PedirOnline() {
 
   const addFromModal = () => {
     if (!modalProduct) return
-    const isPratoFeito = Number(modalProduct.is_prato_feito) === 1 || (normalize(modalProduct.name).includes('prato') && normalize(modalProduct.name).includes('feito'))
+    const isPratoFeito = isPratoFeitoItem(modalProduct)
     if (isPratoFeito && !Number(modalPfEspetinhoId)) {
       setError('Selecione o espetinho que acompanha o Prato Feito.')
       return
@@ -318,13 +336,53 @@ export default function PedirOnline() {
     .filter((c) => c.id === itemId)
     .reduce((sum, c) => sum + c.quantity, 0)
 
-  const addCombo = (combo) => {
+  const addComboInternal = (combo, pfEspByIndex) => {
     const original = combo.products.reduce((s, p) => s + Number(p.price || 0), 0)
     const factor = original > 0 ? combo.price / original : 1
-    for (const p of combo.products) {
+    combo.products.forEach((p, idx) => {
       const adjusted = Number((Number(p.price || 0) * factor).toFixed(2))
-      addItem(p, 1, `Combo: ${combo.name}`, adjusted)
+      let espOk = null
+      if (pfEspByIndex && isPratoFeitoItem(p)) {
+        const e = Number(pfEspByIndex[idx])
+        if (Number.isFinite(e) && e > 0) espOk = e
+      }
+      addItem(p, 1, `Combo: ${combo.name}`, adjusted, espOk)
+    })
+  }
+
+  const requestAddCombo = (combo) => {
+    const pfIndices = Array.isArray(combo.pfSlots) && combo.pfSlots.length > 0
+      ? combo.pfSlots
+      : combo.products.map((p, i) => i).filter((i) => isPratoFeitoItem(combo.products[i]))
+    if (pfIndices.length === 0) {
+      addComboInternal(combo, null)
+      return
     }
+    const initial = {}
+    pfIndices.forEach((i) => { initial[i] = '' })
+    setError('')
+    setComboPfSelections(initial)
+    setComboModal(combo)
+  }
+
+  const confirmComboModal = () => {
+    if (!comboModal) return
+    const pfIndices = Array.isArray(comboModal.pfSlots) && comboModal.pfSlots.length > 0
+      ? comboModal.pfSlots
+      : comboModal.products.map((p, i) => i).filter((i) => isPratoFeitoItem(comboModal.products[i]))
+    for (const i of pfIndices) {
+      const v = comboPfSelections[i]
+      if (!v || !Number(v)) {
+        setError('Selecione o espetinho para cada Prato Feito do combo.')
+        return
+      }
+    }
+    setError('')
+    const map = {}
+    pfIndices.forEach((idx) => { map[idx] = Number(comboPfSelections[idx]) })
+    addComboInternal(comboModal, map)
+    setComboModal(null)
+    setComboPfSelections({})
   }
 
   const updateQty = (id, observations, pratoFeitoEspetinhoId, delta) => {
@@ -490,7 +548,7 @@ export default function PedirOnline() {
                 <h2 className="text-xl font-semibold">Combos</h2>
               </div>
               <div className="space-y-3">
-                {combos.map((combo) => <ComboCard key={combo.id} combo={combo} onAddCombo={addCombo} />)}
+                {combos.map((combo) => <ComboCard key={combo.id} combo={combo} onRequestAddCombo={requestAddCombo} />)}
               </div>
             </section>
           )}
@@ -580,7 +638,7 @@ export default function PedirOnline() {
             {modalProduct.description && <p className="mt-1 text-sm text-slate-600">{modalProduct.description}</p>}
             <p className="mt-2 text-2xl font-semibold text-slate-900">{formatPrice(modalProduct.price)}</p>
 
-            {(Number(modalProduct.is_prato_feito) === 1 || (normalize(modalProduct.name).includes('prato') && normalize(modalProduct.name).includes('feito'))) && (
+            {isPratoFeitoItem(modalProduct) && (
               <div className="mt-4">
                 <label className="mb-1 block text-sm font-semibold text-slate-700">Escolha o espetinho do Prato Feito *</label>
                 <select
@@ -629,6 +687,53 @@ export default function PedirOnline() {
           </div>
         </div>
       )}
+
+      {comboModal && (() => {
+        const pfIdx = Array.isArray(comboModal.pfSlots) && comboModal.pfSlots.length > 0
+          ? comboModal.pfSlots
+          : comboModal.products.map((p, i) => i).filter((i) => isPratoFeitoItem(comboModal.products[i]))
+        return (
+          <div
+            className="fixed inset-0 z-[100] flex items-end justify-center bg-black/45 sm:items-center"
+            onClick={() => { setComboModal(null); setComboPfSelections({}) }}
+          >
+            <div className="w-full max-w-md rounded-t-3xl bg-white p-5 shadow-float sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-2xl font-semibold">{comboModal.emoji} {comboModal.name}</h3>
+              <p className="mt-1 text-sm text-slate-600">Para cada Prato Feito do combo, escolha o espetinho (obrigatório no caixa).</p>
+              {pfIdx.map((productIndex, j) => (
+                <div key={productIndex} className="mt-4">
+                  <label className="mb-1 block text-sm font-semibold text-slate-700">
+                    Espetinho do Prato Feito{pfIdx.length > 1 ? ` (${j + 1}/${pfIdx.length})` : ''} *
+                  </label>
+                  <select
+                    className="w-full rounded-xl border px-4 py-3"
+                    value={comboPfSelections[productIndex] ?? ''}
+                    onChange={(e) => setComboPfSelections((s) => ({ ...s, [productIndex]: e.target.value }))}
+                  >
+                    <option value="">Selecione</option>
+                    {espetinhosOnline.map((esp) => (
+                      <option key={esp.id} value={esp.id}>{esp.name}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+              {error && <p className="mt-3 rounded-lg bg-red-50 p-2 text-sm text-red-700">{error}</p>}
+              <div className="mt-5 flex gap-2">
+                <button
+                  type="button"
+                  className="flex-1 rounded-xl border border-slate-300 py-3 font-semibold text-slate-700"
+                  onClick={() => { setError(''); setComboModal(null); setComboPfSelections({}) }}
+                >
+                  Cancelar
+                </button>
+                <button type="button" className="flex-1 rounded-xl bg-black py-3 font-semibold text-white" onClick={confirmComboModal}>
+                  Adicionar combo - {formatPrice(comboModal.price)}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {isCartOpen && (
         <div className="fixed inset-0 z-50 bg-black/45" onClick={() => setIsCartOpen(false)}>
