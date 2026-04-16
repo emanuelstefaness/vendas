@@ -3,6 +3,9 @@ import { Link } from 'react-router-dom'
 import { getApiBase } from '../devApiBase'
 
 const API = getApiBase()
+/** Taxa fixa de entrega (R$) para pedidos delivery (igual ao backend `public.js`). */
+const TAXA_ENTREGA_DELIVERY = 10
+
 const BEBIDAS_SLUGS = ['bebidas', 'caipirinhas']
 const HIDDEN_CATEGORY_SLUGS = ['chopp-cerveja', 'drinks', 'doses']
 const IMAGE_FILE_BY_ITEM_NAME = {
@@ -254,7 +257,9 @@ export default function PedirOnline() {
   }, [menu.items, categoriesBySlug])
 
   const totalItems = cart.reduce((s, i) => s + i.quantity, 0)
-  const totalPrice = cart.reduce((s, i) => s + i.price * i.quantity, 0)
+  const subtotalItens = useMemo(() => cart.reduce((s, i) => s + i.price * i.quantity, 0), [cart])
+  const taxaEntrega = checkout.tipo === 'delivery' ? TAXA_ENTREGA_DELIVERY : 0
+  const totalPrice = subtotalItens + taxaEntrega
 
   const suggestedItems = useMemo(() => {
     if (!modalProduct) return []
@@ -280,11 +285,13 @@ export default function PedirOnline() {
     setModalPfEspetinhoId('')
   }, [modalProduct])
 
-  const addItem = (item, quantity = 1, observations = null, fixedPrice = null, pratoFeitoEspetinhoId = null) => {
+  /** `user_note` = só texto digitado pelo cliente (ex.: ponto da carne). Não guarda rótulos de combo na UI. */
+  const addItem = (item, quantity = 1, userNote = null, fixedPrice = null, pratoFeitoEspetinhoId = null) => {
+    const note = userNote != null && String(userNote).trim() !== '' ? String(userNote).trim() : null
     setCart((prev) => {
       const idx = prev.findIndex((x) =>
         x.id === item.id &&
-        (x.observations || '') === (observations || '') &&
+        (x.user_note || '') === (note || '') &&
         Number(x.prato_feito_espetinho_id || 0) === Number(pratoFeitoEspetinhoId || 0)
       )
       if (idx >= 0) {
@@ -293,16 +300,12 @@ export default function PedirOnline() {
         return next
       }
       const pfSelected = Number(pratoFeitoEspetinhoId)
-      const pfItem = pfSelected > 0 ? espetinhosOnline.find((e) => Number(e.id) === pfSelected) : null
-      const obsMerged = pfItem
-        ? `${observations ? `${observations} • ` : ''}PF com ${pfItem.name}`
-        : (observations || null)
       return [...prev, {
         id: item.id,
         name: item.name,
         quantity,
         price: fixedPrice ?? Number(item.price),
-        observations: obsMerged,
+        user_note: note,
         prato_feito_espetinho_id: pfSelected > 0 ? pfSelected : null
       }]
     })
@@ -346,7 +349,7 @@ export default function PedirOnline() {
         const e = Number(pfEspByIndex[idx])
         if (Number.isFinite(e) && e > 0) espOk = e
       }
-      addItem(p, 1, `Combo: ${combo.name}`, adjusted, espOk)
+      addItem(p, 1, null, adjusted, espOk)
     })
   }
 
@@ -385,11 +388,11 @@ export default function PedirOnline() {
     setComboPfSelections({})
   }
 
-  const updateQty = (id, observations, pratoFeitoEspetinhoId, delta) => {
+  const updateQty = (id, userNote, pratoFeitoEspetinhoId, delta) => {
     setCart((prev) => {
       const idx = prev.findIndex((x) =>
         x.id === id &&
-        (x.observations || '') === (observations || '') &&
+        (x.user_note || '') === (userNote || '') &&
         Number(x.prato_feito_espetinho_id || 0) === Number(pratoFeitoEspetinhoId || 0)
       )
       if (idx < 0) return prev
@@ -433,7 +436,7 @@ export default function PedirOnline() {
           items: cart.map((c) => ({
             item_id: c.id,
             quantity: c.quantity,
-            observations: c.observations || null,
+            observations: c.user_note || null,
             prato_feito_espetinho_id: c.prato_feito_espetinho_id || null
           })),
         }),
@@ -582,13 +585,25 @@ export default function PedirOnline() {
             <h3 className="text-xl font-semibold">Seu Pedido ({totalItems})</h3>
             <ul className="mt-2 space-y-2 text-sm text-slate-700">
               {cart.map((c, i) => (
-                <li key={`${c.id}-${c.observations || ''}-${i}`} className="flex justify-between gap-2">
+                <li key={`${c.id}-${c.user_note || ''}-${i}`} className="flex justify-between gap-2">
                   <span>{c.quantity}x {c.name}</span>
                   <span className="font-semibold">{formatPrice(c.quantity * c.price)}</span>
                 </li>
               ))}
             </ul>
-            <p className="mt-3 border-t pt-3 text-lg font-bold">Total: {formatPrice(totalPrice)}</p>
+            <div className="mt-3 space-y-1 border-t pt-3 text-sm text-slate-700">
+              <div className="flex justify-between">
+                <span>Subtotal (itens)</span>
+                <span className="font-semibold">{formatPrice(subtotalItens)}</span>
+              </div>
+              {taxaEntrega > 0 && (
+                <div className="flex justify-between text-slate-600">
+                  <span>Taxa de entrega</span>
+                  <span className="font-semibold">{formatPrice(taxaEntrega)}</span>
+                </div>
+              )}
+              <p className="pt-1 text-lg font-bold text-slate-900">Total: {formatPrice(totalPrice)}</p>
+            </div>
           </div>
 
           <form onSubmit={handleSubmitOrder} className="space-y-4">
@@ -747,22 +762,32 @@ export default function PedirOnline() {
               <>
                 <div className="space-y-2">
                   {cart.map((item, i) => (
-                    <div key={`${item.id}-${item.observations || ''}-${i}`} className="rounded-xl border p-3">
+                    <div key={`${item.id}-${item.user_note || ''}-${i}`} className="rounded-xl border p-3">
                       <div className="flex items-center justify-between gap-2">
                         <p className="font-semibold">{item.name}</p>
                         <p className="font-bold">{formatPrice(item.price * item.quantity)}</p>
                       </div>
-                      {item.observations && <p className="mt-1 text-xs text-slate-500">{item.observations}</p>}
+                      {item.user_note && <p className="mt-1 text-xs text-slate-500">{item.user_note}</p>}
                       <div className="mt-2 flex items-center gap-2">
-                        <button type="button" className="h-9 w-9 rounded-full border font-bold" onClick={() => updateQty(item.id, item.observations, item.prato_feito_espetinho_id, -1)}>-</button>
+                        <button type="button" className="h-9 w-9 rounded-full border font-bold" onClick={() => updateQty(item.id, item.user_note, item.prato_feito_espetinho_id, -1)}>-</button>
                         <span className="w-8 text-center font-bold">{item.quantity}</span>
-                        <button type="button" className="h-9 w-9 rounded-full border font-bold" onClick={() => updateQty(item.id, item.observations, item.prato_feito_espetinho_id, 1)}>+</button>
+                        <button type="button" className="h-9 w-9 rounded-full border font-bold" onClick={() => updateQty(item.id, item.user_note, item.prato_feito_espetinho_id, 1)}>+</button>
                       </div>
                     </div>
                   ))}
                 </div>
-                <div className="mt-4 border-t pt-4">
-                  <p className="text-xl font-semibold">Total: {formatPrice(totalPrice)}</p>
+                <div className="mt-4 space-y-1 border-t pt-4 text-sm text-slate-600">
+                  <div className="flex justify-between">
+                    <span>Subtotal (itens)</span>
+                    <span className="font-semibold">{formatPrice(subtotalItens)}</span>
+                  </div>
+                  {taxaEntrega > 0 && (
+                    <div className="flex justify-between">
+                      <span>Taxa de entrega</span>
+                      <span className="font-semibold">{formatPrice(taxaEntrega)}</span>
+                    </div>
+                  )}
+                  <p className="pt-1 text-xl font-semibold text-slate-900">Total: {formatPrice(totalPrice)}</p>
                   <button type="button" onClick={() => { setIsCartOpen(false); setStep('checkout') }} className="mt-3 w-full rounded-xl bg-black py-3 font-semibold text-white">
                     Finalizar pedido
                   </button>
@@ -787,6 +812,9 @@ export default function PedirOnline() {
             <span className="text-lg font-semibold">Ver carrinho</span>
             <span className="text-lg font-semibold">{formatPrice(totalPrice)}</span>
           </div>
+          {taxaEntrega > 0 && (
+            <p className="mt-1 text-xs font-medium text-white/80">Inclui taxa de entrega ({formatPrice(taxaEntrega)})</p>
+          )}
         </button>
       )}
     </div>

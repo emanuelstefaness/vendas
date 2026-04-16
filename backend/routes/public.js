@@ -5,6 +5,9 @@ import { getPedidoSector } from '../itemSector.js';
 export const publicRouter = Router();
 const getDb = (req) => req.app.get('db');
 
+/** Taxa fixa de entrega (R$), somada ao total em pedidos `tipo === 'delivery'`. */
+const TAXA_ENTREGA_DELIVERY = 10;
+
 // Diagnóstico: confirma que a API pública está no ar
 publicRouter.get('/', (req, res) => {
   res.json({ ok: true, message: 'API pública pedidos online' });
@@ -98,6 +101,9 @@ publicRouter.post('/orders', (req, res) => {
   }
   if (validItems.length === 0) {
     return res.status(400).json({ error: 'Nenhum item válido no pedido' });
+  }
+  if (tipo === 'delivery') {
+    valorTotal += TAXA_ENTREGA_DELIVERY;
   }
 
   const run = db.transaction(() => {

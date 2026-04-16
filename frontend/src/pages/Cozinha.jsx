@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { getPedidosKitchen, setPedidoSectorStatus, updatePedido } from '../api'
 import { useSocket } from '../socket'
 import PedidoElapsed, { earliestCreatedAt } from '../components/PedidoElapsed'
+import { cozinhaPedidoCardClass, comandaOnlineLabel } from '../utils/comandaOnlineVisual'
 
 /** Totais por item + linhas "q — descrição" quando há observations */
 function buildKitchenProductionCards(pedidos) {
@@ -110,6 +111,10 @@ export default function Cozinha() {
 
   const productionByItem = useMemo(() => buildKitchenProductionCards(outrosPedidos), [outrosPedidos])
   const pratoFeitoSummary = useMemo(() => buildPratoFeitoProductionSummary(pratoFeitoPedidos), [pratoFeitoPedidos])
+  const pratoFeitoTemDelivery = useMemo(
+    () => pratoFeitoPedidos.some((p) => p.comanda_tipo_online === 'delivery'),
+    [pratoFeitoPedidos]
+  )
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col">
@@ -156,15 +161,29 @@ export default function Cozinha() {
         {outrosPedidos.map((p) => (
           <div
             key={p.id}
-            className={`flex items-center justify-between gap-2 rounded-xl border-2 p-3 ${
-              p.waiting_grill ? 'border-amber-400 bg-amber-50' : 'border-slate-200 bg-white shadow-sm'
-            }`}
+            className={cozinhaPedidoCardClass(p)}
           >
             <div className="min-w-0 flex-1">
+              {p.comanda_tipo_online === 'delivery' && (
+                <div className="mb-2 rounded-lg border-2 border-sky-600 bg-sky-200 px-3 py-2 text-center shadow-sm">
+                  <p className="text-sm font-black uppercase tracking-wide text-sky-950">🚚 Delivery</p>
+                  <p className="mt-0.5 text-xs font-semibold leading-snug text-sky-900">
+                    Embalar / preparar para envio — não é consumo na mesa
+                  </p>
+                </div>
+              )}
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0">
                 <span className="font-medium text-slate-800">{p.quantity}x {p.item_name}</span>
+                {p.comanda_tipo_online !== 'delivery' && comandaOnlineLabel(p.comanda_tipo_online) && (
+                  <span className="rounded-full bg-black/5 px-2 py-0.5 text-[11px] font-bold text-slate-700">
+                    {comandaOnlineLabel(p.comanda_tipo_online)}
+                  </span>
+                )}
                 <PedidoElapsed createdAt={p.created_at} className="text-xs" />
               </div>
+              {p.mesa && p.comanda_tipo_online === 'delivery' && (
+                <p className="mt-1 text-xs font-medium text-sky-900">{p.mesa}</p>
+              )}
               {p.waiting_grill && <span className="text-amber-600 text-sm">(aguard. churrasq.)</span>}
               {p.waiter_name && <span className="ml-2 text-slate-500 text-xs">— {p.waiter_name}</span>}
               {p.observations && <p className="text-amber-800 text-sm font-medium">Descrição: {p.observations}</p>}
@@ -202,8 +221,21 @@ export default function Cozinha() {
           </div>
         ))}
         {pratoFeitoPedidos.length > 0 && (
-          <div className="flex items-center justify-between gap-2 rounded-xl border-2 border-amber-400 bg-amber-50 p-3">
+          <div
+            className={`flex items-center justify-between gap-2 rounded-xl border-2 p-3 ${
+              pratoFeitoTemDelivery
+                ? 'border-sky-500 bg-gradient-to-r from-sky-100 to-amber-50'
+                : 'border-amber-400 bg-amber-50'
+            }`}
+          >
             <div className="min-w-0 flex-1">
+              {pratoFeitoTemDelivery && (
+                <div className="mb-2 rounded-md border border-sky-600 bg-sky-200 px-2 py-1.5 text-center">
+                  <span className="text-xs font-black uppercase tracking-wide text-sky-950">
+                    🚚 Há Prato Feito para delivery — embalar para envio
+                  </span>
+                </div>
+              )}
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0">
                 <span className="font-medium text-amber-800">{totalPratoFeito}x Prato Feito</span>
                 <PedidoElapsed createdAt={earliestCreatedAt(pratoFeitoPedidos)} className="text-xs" />

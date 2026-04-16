@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { getPedidosBar, setPedidoSectorStatus } from '../api'
 import { useSocket } from '../socket'
 import PedidoElapsed, { earliestCreatedAt } from '../components/PedidoElapsed'
+import { barComandaColumnClass, comandaOnlineLabel } from '../utils/comandaOnlineVisual'
 
 /** Ordem dos cards = ordem de lançamento na fila (ver Churrasqueira.jsx). */
 function groupByComanda(list) {
@@ -69,11 +70,18 @@ export default function Bar() {
         {cards.map((card) => (
           <div
             key={card.comanda_id}
-            className="flex w-[min(300px,85vw)] min-w-[240px] shrink-0 flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+            className={barComandaColumnClass(card.items[0]?.comanda_tipo_online)}
           >
             <div className="mb-2 flex flex-wrap items-center justify-between gap-1">
               <div>
-                <span className="font-bold text-sm text-slate-800">Comanda {card.comanda_id} — Mesa {card.mesa}</span>
+                <span className="font-bold text-sm text-slate-800">
+                  Comanda {card.comanda_id} — Mesa {card.mesa}
+                  {comandaOnlineLabel(card.items[0]?.comanda_tipo_online) && (
+                    <span className="ml-2 inline-block rounded-full bg-slate-200/90 px-2 py-0.5 text-[10px] font-bold text-slate-800">
+                      {comandaOnlineLabel(card.items[0]?.comanda_tipo_online)}
+                    </span>
+                  )}
+                </span>
                 {card.items[0]?.waiter_name && <span className="ml-2 text-slate-500 text-xs">Garçom: {card.items[0].waiter_name}</span>}
                 <div className="mt-0.5" title="Tempo desde o pedido mais antigo desta comanda na fila">
                   <PedidoElapsed createdAt={earliestCreatedAt(card.items)} className="text-xs" />

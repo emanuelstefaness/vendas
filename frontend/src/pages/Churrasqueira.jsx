@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { getPedidosGrill, getProductionGrill, setPedidoSectorStatus } from '../api'
 import { useSocket } from '../socket'
 import PedidoElapsed, { earliestCreatedAt } from '../components/PedidoElapsed'
+import { churrasqueiraComandaColumnClass, comandaOnlineLabel } from '../utils/comandaOnlineVisual'
 
 /** Agrupa por comanda mantendo ordem de lançamento (primeiro pedido na fila define a ordem dos cards). Não usar Object + comanda_id numérico: o JS reordena chaves inteiras. */
 function groupByComanda(list) {
@@ -184,11 +185,18 @@ export default function Churrasqueira() {
         {cards.map((card) => (
           <div
             key={card.comanda_id}
-            className="flex w-[min(272px,70vw)] min-w-[224px] shrink-0 flex-col self-start rounded-2xl border-2 border-amber-500/90 bg-white p-4 shadow-[0_8px_30px_rgb(0,0,0,0.12)] ring-1 ring-amber-900/10"
+            className={churrasqueiraComandaColumnClass(card.items[0]?.comanda_tipo_online)}
           >
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
-                <span className="text-base font-bold text-amber-700">Comanda {card.comanda_id} — Mesa {card.mesa}</span>
+                <span className={`text-base font-bold ${card.items[0]?.comanda_tipo_online === 'delivery' ? 'text-sky-800' : card.items[0]?.comanda_tipo_online === 'retirada' ? 'text-teal-900' : 'text-amber-700'}`}>
+                  Comanda {card.comanda_id} — Mesa {card.mesa}
+                </span>
+                {comandaOnlineLabel(card.items[0]?.comanda_tipo_online) && (
+                  <span className="ml-2 inline-block rounded-full bg-black/10 px-2 py-0.5 text-[11px] font-bold text-slate-800">
+                    {comandaOnlineLabel(card.items[0]?.comanda_tipo_online)}
+                  </span>
+                )}
                 {card.items[0]?.waiter_name && <span className="ml-2 text-slate-500 text-xs">Garçom: {card.items[0].waiter_name}</span>}
                 <div className="mt-0.5" title="Tempo desde o pedido mais antigo desta comanda na fila">
                   <PedidoElapsed createdAt={earliestCreatedAt(card.items)} className="text-xs" />

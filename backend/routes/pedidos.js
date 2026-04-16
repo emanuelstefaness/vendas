@@ -86,7 +86,7 @@ pedidosRouter.get('/by-comanda/:comanda_id', (req, res) => {
 pedidosRouter.get('/kitchen', (req, res) => {
   const db = getDb(req);
   const list = db.prepare(`
-    SELECT p.*, i.name as item_name, i.is_grill, i.is_prato_feito, c.mesa, c.id as comanda_id, s.status as sector_status,
+    SELECT p.*, i.name as item_name, i.is_grill, i.is_prato_feito, c.mesa, c.id as comanda_id, c.tipo_online as comanda_tipo_online, s.status as sector_status,
       ei.name as prato_feito_espetinho_name, w.name as waiter_name
     FROM pedido_sector_status s
     JOIN pedidos p ON p.id = s.pedido_id
@@ -109,7 +109,7 @@ pedidosRouter.get('/kitchen', (req, res) => {
 pedidosRouter.get('/grill', (req, res) => {
   const db = getDb(req);
   const list = db.prepare(`
-    SELECT p.*, i.name as item_name, i.is_prato_feito as item_is_prato_feito, c.mesa, c.id as comanda_id, s.status as sector_status,
+    SELECT p.*, i.name as item_name, i.is_prato_feito as item_is_prato_feito, c.mesa, c.id as comanda_id, c.tipo_online as comanda_tipo_online, s.status as sector_status,
       ei.name as prato_feito_espetinho_name, w.name as waiter_name
     FROM pedido_sector_status s
     JOIN pedidos p ON p.id = s.pedido_id
@@ -127,7 +127,7 @@ pedidosRouter.get('/bar', (req, res) => {
   const db = getDb(req);
   const barIn = BAR_CATEGORY_SLUGS.map(() => '?').join(', ');
   const list = db.prepare(`
-    SELECT p.*, i.name as item_name, c.mesa, c.id as comanda_id, COALESCE(s.status, 'pending') as sector_status,
+    SELECT p.*, i.name as item_name, c.mesa, c.id as comanda_id, c.tipo_online as comanda_tipo_online, COALESCE(s.status, 'pending') as sector_status,
       w.name as waiter_name
     FROM pedidos p
     JOIN items i ON i.id = p.item_id
