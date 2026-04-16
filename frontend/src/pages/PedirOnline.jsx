@@ -219,6 +219,7 @@ export default function PedirOnline() {
     cliente_telefone: '',
     cliente_email: '',
     observacoes: '',
+    forma_pagamento: 'pix',
     endereco_rua: '',
     endereco_numero: '',
     endereco_complemento: '',
@@ -504,6 +505,11 @@ export default function PedirOnline() {
       setError('Para delivery, informe rua, número e bairro.')
       return
     }
+    const formas = ['pix', 'dinheiro', 'cartao_debito', 'cartao_credito', 'vale']
+    if (!formas.includes(String(checkout.forma_pagamento || '').toLowerCase())) {
+      setError('Selecione a forma de pagamento.')
+      return
+    }
     setSubmitting(true)
     setError('')
     try {
@@ -516,6 +522,7 @@ export default function PedirOnline() {
           cliente_telefone: checkout.cliente_telefone.trim(),
           cliente_email: checkout.cliente_email.trim() || undefined,
           observacoes: checkout.observacoes.trim() || undefined,
+          forma_pagamento: String(checkout.forma_pagamento || 'pix').toLowerCase(),
           endereco_rua: checkout.tipo === 'delivery' ? checkout.endereco_rua.trim() : undefined,
           endereco_numero: checkout.tipo === 'delivery' ? checkout.endereco_numero.trim() : undefined,
           endereco_complemento: checkout.tipo === 'delivery' ? checkout.endereco_complemento.trim() : undefined,
@@ -718,6 +725,36 @@ export default function PedirOnline() {
             )}
 
             <input className="w-full rounded-xl border px-4 py-3" placeholder="Observações (opcional)" value={checkout.observacoes} onChange={(e) => setCheckout((c) => ({ ...c, observacoes: e.target.value }))} />
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="mb-3 text-sm font-semibold text-slate-800">Forma de pagamento *</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {[
+                  ['pix', 'PIX'],
+                  ['dinheiro', 'Dinheiro'],
+                  ['cartao_debito', 'Cartão de débito'],
+                  ['cartao_credito', 'Cartão de crédito'],
+                  ['vale', 'Vale refeição / alimentação'],
+                ].map(([val, lab]) => (
+                  <label
+                    key={val}
+                    className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium ${
+                      checkout.forma_pagamento === val ? 'border-[hsl(var(--menu-primary))] bg-orange-50' : 'border-slate-200 bg-slate-50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="forma_pagamento_pedir"
+                      value={val}
+                      checked={checkout.forma_pagamento === val}
+                      onChange={() => setCheckout((c) => ({ ...c, forma_pagamento: val }))}
+                      className="h-4 w-4 accent-[hsl(var(--menu-primary))]"
+                    />
+                    {lab}
+                  </label>
+                ))}
+              </div>
+            </div>
 
             <button type="submit" disabled={submitting} className="w-full rounded-xl bg-black py-4 text-lg font-semibold text-white disabled:opacity-70">
               {submitting ? 'Enviando...' : `Confirmar pedido - ${formatPrice(totalPrice)}`}

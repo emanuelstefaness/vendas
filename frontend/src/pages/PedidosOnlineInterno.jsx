@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { getOrders, updateOrderStatus, getPrintOrder } from '../api'
 import { useSocket } from '../socket'
+import { buildPedidoOnlinePrintHtml, formatFormaPagamentoLabel, openComandaPrintWindow } from '../utils/comandaImpressao'
 
 const STATUS_LABEL = {
   recebido: 'Recebido',
@@ -71,29 +72,7 @@ export default function PedidosOnlineInterno() {
 
   const handlePrint = (order) => {
     getPrintOrder(order.id).then((d) => {
-      const lines = [
-        '========== ' + d.logo + ' ==========',
-        d.tipo + ' #' + d.numero,
-        '-----------------------------------',
-        'Cliente: ' + d.cliente_nome,
-        'Tel: ' + d.cliente_telefone,
-        '-----------------------------------'
-      ]
-      if (d.endereco_rua) {
-        lines.push(
-          d.endereco_rua + ', ' + d.endereco_numero + (d.endereco_complemento ? ' ' + d.endereco_complemento : ''),
-          d.endereco_bairro + (d.endereco_referencia ? ' - ' + d.endereco_referencia : ''),
-          '-----------------------------------'
-        )
-      }
-      lines.push(...d.items.map((i) => i.quantity + 'x ' + i.item_name + '  R$ ' + (i.quantity * i.unit_price).toFixed(2)))
-      lines.push('-----------------------------------', 'TOTAL: R$ ' + Number(d.valor_total).toFixed(2), '===================================')
-      const text = lines.join('\n')
-      const w = window.open('', '_blank')
-      w.document.write('<pre style="font-family:monospace; padding:16px; font-size:14px">' + text.replace(/</g, '&lt;') + '</pre>')
-      w.document.title = 'Pedido #' + d.numero
-      w.print()
-      w.close()
+      openComandaPrintWindow(buildPedidoOnlinePrintHtml(d), `Pedido #${d.numero}`)
     })
   }
 
@@ -157,10 +136,14 @@ export default function PedidosOnlineInterno() {
                 </span>
               </div>
               <p className="text-slate-700">{order.cliente_nome} — {order.cliente_telefone}</p>
+              <p className="mt-1 text-sm text-slate-600">
+                Pagamento: <span className="font-medium text-slate-800">{formatFormaPagamentoLabel(order.forma_pagamento)}</span>
+              </p>
               {order.tipo === 'delivery' && order.endereco_rua && (
                 <p className="mt-1 text-sm text-slate-600">
                   {order.endereco_rua}, {order.endereco_numero}
                   {order.endereco_complemento ? ' ' + order.endereco_complemento : ''} — {order.endereco_bairro}
+                  {order.endereco_referencia ? ` — Ref.: ${order.endereco_referencia}` : ''}
                 </p>
               )}
               <ul className="mt-2 space-y-1 text-sm text-slate-600">
@@ -197,11 +180,9 @@ export default function PedidosOnlineInterno() {
                     Cancelar
                   </button>
                 )}
-                {order.tipo === 'delivery' && (
-                  <button type="button" className="btn btn-secondary text-sm" onClick={() => handlePrint(order)}>
-                    Imprimir comanda
-                  </button>
-                )}
+                <button type="button" className="btn btn-secondary text-sm" onClick={() => handlePrint(order)}>
+                  Imprimir comanda
+                </button>
               </div>
             </div>
           ))}

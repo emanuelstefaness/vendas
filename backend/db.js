@@ -141,6 +141,15 @@ export function initDb() {
     CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
   `);
 
+  const orderCols = ['forma_pagamento TEXT'];
+  for (const col of orderCols) {
+    try {
+      db.exec(`ALTER TABLE orders ADD COLUMN ${col}`);
+    } catch (e) {
+      if (!e.message || !e.message.includes('duplicate column')) throw e;
+    }
+  }
+
   const cols = [
     'origin_order_id INTEGER',
     'tipo_online TEXT',

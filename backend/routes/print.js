@@ -69,10 +69,12 @@ printRouter.get('/order/:id', (req, res) => {
   `).all(id);
   res.json({
     logo: 'BOSQUE DA CARNE',
-    tipo: 'PEDIDO ONLINE',
+    tipo: order.tipo,
     numero: order.id,
     cliente_nome: order.cliente_nome,
     cliente_telefone: order.cliente_telefone,
+    cliente_email: order.cliente_email,
+    forma_pagamento: order.forma_pagamento,
     endereco_rua: order.endereco_rua,
     endereco_numero: order.endereco_numero,
     endereco_complemento: order.endereco_complemento,

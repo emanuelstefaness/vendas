@@ -41,6 +41,7 @@ publicRouter.post('/orders', (req, res) => {
     endereco_complemento,
     endereco_bairro,
     endereco_referencia,
+    forma_pagamento,
     items: cartItems
   } = req.body || {};
 
@@ -52,6 +53,12 @@ publicRouter.post('/orders', (req, res) => {
   if (!nome || !telefone) {
     return res.status(400).json({ error: 'Nome e telefone são obrigatórios' });
   }
+  const formasValidas = ['pix', 'dinheiro', 'cartao_debito', 'cartao_credito', 'vale'];
+  const formaRaw = String(forma_pagamento ?? 'pix').trim().toLowerCase();
+  if (!formasValidas.includes(formaRaw)) {
+    return res.status(400).json({ error: 'Forma de pagamento inválida.' });
+  }
+  const formaPg = formaRaw;
   if (tipo === 'delivery') {
     const rua = String(endereco_rua || '').trim();
     const numero = String(endereco_numero || '').trim();
@@ -113,9 +120,9 @@ publicRouter.post('/orders', (req, res) => {
     // orders.comanda_id referencia comandas(id): inserir pedido sem comanda_id, criar comanda, depois vincular (FK com foreign_keys=ON)
     const orderInfo = db.prepare(`
       INSERT INTO orders (tipo, status, cliente_nome, cliente_telefone, cliente_email, observacoes,
-        endereco_rua, endereco_numero, endereco_complemento, endereco_bairro, endereco_referencia, valor_total, comanda_id)
+        endereco_rua, endereco_numero, endereco_complemento, endereco_bairro, endereco_referencia, valor_total, forma_pagamento, comanda_id)
       VALUES (?, 'recebido', ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, NULL)
+        ?, ?, ?, ?, ?, ?, ?, NULL)
     `).run(
       tipo,
       nome,
@@ -127,7 +134,8 @@ publicRouter.post('/orders', (req, res) => {
       tipo === 'delivery' ? (endereco_complemento ? String(endereco_complemento).trim() : null) : null,
       tipo === 'delivery' ? String(endereco_bairro || '').trim() : null,
       tipo === 'delivery' ? (endereco_referencia ? String(endereco_referencia).trim() : null) : null,
-      valorTotal
+      valorTotal,
+      formaPg
     );
     const orderId = orderInfo.lastInsertRowid;
 
