@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { getApiBase } from '../devApiBase'
 
@@ -9,7 +9,7 @@ const TAXA_ENTREGA_DELIVERY = 10
 const BEBIDAS_SLUGS = ['bebidas', 'caipirinhas']
 const HIDDEN_CATEGORY_SLUGS = ['chopp-cerveja', 'drinks', 'doses']
 const IMAGE_FILE_BY_ITEM_NAME = {
-  'churraspao': 'churraspao.jpg',
+  'churraspao': 'churraspao.png',
   'coracao de frango': 'coração.png',
   'entrevero': 'entrevero',
   'gado com bacon': 'gadobacon.png',
@@ -17,8 +17,45 @@ const IMAGE_FILE_BY_ITEM_NAME = {
   'pao de alho': 'pao de alho.png',
   'prato feito do bosque': 'pratofeito.png',
   'queijo coalho': 'queijocoalho.png',
-  'salada do bosque': 'salada do bosque.jpg',
-  'x-bosque': 'xbosque.jpg'
+  'salada do bosque': 'salada do bosque.png',
+  'x-bosque': 'xbosque.png'
+}
+
+/**
+ * Textos de vitrine só no Pedir online (não vão para API, pedido, cozinha nem impressão).
+ * Chave = nome do item normalizado (ver `normalize()`).
+ */
+const PEDIR_MARKETING_DESC = {
+  entrevero:
+    'O prato típico do Paraná em nossa versão: entrevero suculento, com mix de carnes (bovina, frango, suíno e calabresa), pimentão e cebola salteados no shoyu — sabor marcante que abre o apetite só de sentir o cheiro.',
+  'prato feito do bosque':
+    'Comida de domingo no meio da semana: arroz soltinho, salada do bosque, maionese cremosa e um espetinho à sua escolha — simples, caprichado e com gostinho de casa.',
+  'salada do bosque':
+    'Mix de alfaces frescas com cenoura e pepino, finalizada com bacon crocante, parmesão, torradas e molhos especiais — leve, crocante e cheia de sabor.',
+  arvoredo:
+    'O premium da casa: ancho na brasa, suculento e no ponto certo, acompanhado de arroz, maionese cremosa e nossa Salada do Bosque — completo, intenso e simplesmente irresistível.',
+  'x bosque':
+    'Hambúrguer de kafta suculento, cheddar derretido, alface americana crocante e cebola caramelizada — combinação intensa, agridoce e simplesmente viciante.',
+  'x-bosque':
+    'Hambúrguer de kafta suculento, cheddar derretido, alface americana crocante e cebola caramelizada — combinação intensa, agridoce e simplesmente viciante.',
+  churraspao:
+    'Carne bovina suculenta, alface americana crocante, maionese da casa e uma camada generosa de queijo gratinado — muito queijo, muito sabor e zero moderação.',
+  'gado com bacon':
+    'Carne bovina suculenta com pedaços de bacon — defumado, intenso e impossível de resistir.',
+  'gado com bacon e legumes':
+    'Carne bovina macia com legumes grelhados — leve, saboroso e no ponto certo.',
+  'medalhao de frango':
+    'Frango macio envolto em bacon, dourado na brasa — suculento e cheio de sabor.',
+  'medalhao suino':
+    'Carne suína temperada, envolta em bacon e grelhada — macia, dourada e irresistível.',
+  'coracao de frango':
+    'Clássico da brasa, bem temperado e suculento — sabor marcante em cada mordida.',
+  'medalhao de mandioca':
+    'Mandioca macia envolta em bacon crocante — combinação perfeita de textura e sabor.',
+  'queijo coalho':
+    'Queijo dourado na brasa, crocante por fora e macio por dentro — simples e delicioso.',
+  'pao de alho':
+    'Pão crocante com recheio cremoso de alho — dourado, cheiroso e viciante.',
 }
 
 const formatPrice = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -35,13 +72,64 @@ function isPratoFeitoItem(item) {
   return n.includes('prato') && n.includes('feito')
 }
 
+/** Descrição de vitrine só no front do Pedir (não repassar ao backend). */
+function descricaoPedirSomenteFront(item) {
+  if (!item?.name) return null
+  const n = normalize(item.name)
+  if (PEDIR_MARKETING_DESC[n]) return PEDIR_MARKETING_DESC[n]
+  if (n.includes('arvoredo')) return PEDIR_MARKETING_DESC.arvoredo
+  if (isPratoFeitoItem(item)) return PEDIR_MARKETING_DESC['prato feito do bosque']
+  return null
+}
+
+function textoDescricaoItemPedir(item) {
+  return descricaoPedirSomenteFront(item) || item.description || 'Delicioso, preparado na hora com ingredientes selecionados.'
+}
+
 function getItemImageUrl(apiBase, itemName) {
   const fileName = IMAGE_FILE_BY_ITEM_NAME[normalize(itemName)]
   if (!fileName) return null
   return `${apiBase}/api/public/cardapio-img/${encodeURIComponent(fileName)}`
 }
 
+/** Nome do arquivo em `public/fotocardapio/` (deploy Vercel = mesmo site do Pedir). */
+function fotocardapioFileForItemName(itemName) {
+  const n = normalize(itemName)
+  if (IMAGE_FILE_BY_ITEM_NAME[n]) return IMAGE_FILE_BY_ITEM_NAME[n]
+  const slug = n.replace(/\s+/g, '-').replace(/[^a-z0-9-]+/g, '')
+  return slug ? `${slug}.jpg` : null
+}
+
+/** URL servida pelo Vite/Vercel a partir da pasta `frontend/public/fotocardapio/`. */
+function fotocardapioPublicUrl(itemName) {
+  const file = fotocardapioFileForItemName(itemName)
+  if (!file) return null
+  const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '')
+  return `${base}/fotocardapio/${encodeURIComponent(file)}`.replace(/\/+/g, '/')
+}
+
+function resolvePedirItemImages(itemName, apiBase) {
+  const local = fotocardapioPublicUrl(itemName)
+  const api = apiBase ? getItemImageUrl(apiBase, itemName) : null
+  if (local && api && local !== api) return { image: local, imageFallback: api }
+  if (local) return { image: local, imageFallback: api || null }
+  return { image: api || null, imageFallback: null }
+}
+
 function ProductCard({ item, badges = [], highlight, onOpen }) {
+  const [imgSrc, setImgSrc] = useState(item.image || null)
+  useEffect(() => {
+    setImgSrc(item.image || null)
+  }, [item.image, item.id])
+
+  const onImgError = useCallback(() => {
+    if (item.imageFallback && imgSrc === item.image) {
+      setImgSrc(item.imageFallback)
+      return
+    }
+    setImgSrc(null)
+  }, [imgSrc, item.image, item.imageFallback])
+
   return (
     <article
       onClick={() => onOpen(item)}
@@ -50,8 +138,8 @@ function ProductCard({ item, badges = [], highlight, onOpen }) {
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-xl font-semibold text-slate-900">{item.name}</h3>
-          <p className="mt-1 line-clamp-2 text-sm leading-5 text-slate-500">
-            {item.description || 'Delicioso, preparado na hora com ingredientes selecionados.'}
+          <p className="mt-1 line-clamp-4 text-sm leading-5 text-slate-500">
+            {textoDescricaoItemPedir(item)}
           </p>
           {badges.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -65,8 +153,8 @@ function ProductCard({ item, badges = [], highlight, onOpen }) {
           <p className="mt-2 text-lg font-semibold text-slate-800">{formatPrice(item.price)}</p>
         </div>
         <div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-slate-100">
-          {item.image ? (
-            <img src={item.image} alt={item.name} className="h-full w-full object-cover" />
+          {imgSrc ? (
+            <img src={imgSrc} alt={item.name} className="h-full w-full object-cover" onError={onImgError} />
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
               <span className="text-3xl font-bold text-slate-400">{item.name?.charAt(0) || '🍽️'}</span>
@@ -149,10 +237,10 @@ export default function PedirOnline() {
         return r.json()
       })
       .then((data) => {
-        const items = (data.items || []).map((it) => ({
-          ...it,
-          image: getItemImageUrl(apiBase, it.name)
-        }))
+        const items = (data.items || []).map((it) => {
+          const { image, imageFallback } = resolvePedirItemImages(it.name, apiBase)
+          return { ...it, image, imageFallback }
+        })
         setMenu({ ...data, items })
       })
       .catch((err) => setError(err.message || 'Erro ao carregar cardápio'))
@@ -650,7 +738,7 @@ export default function PedirOnline() {
         >
           <div className="w-full max-w-md rounded-t-3xl bg-white p-5 shadow-float sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-2xl font-semibold">{modalProduct.name}</h3>
-            {modalProduct.description && <p className="mt-1 text-sm text-slate-600">{modalProduct.description}</p>}
+            <p className="mt-1 text-sm leading-relaxed text-slate-600">{textoDescricaoItemPedir(modalProduct)}</p>
             <p className="mt-2 text-2xl font-semibold text-slate-900">{formatPrice(modalProduct.price)}</p>
 
             {isPratoFeitoItem(modalProduct) && (
