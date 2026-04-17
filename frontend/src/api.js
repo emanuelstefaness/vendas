@@ -305,11 +305,15 @@ export async function getOrders(tipo, status) {
   return r.json();
 }
 
-export async function updateOrderStatus(id, status) {
+export async function updateOrderStatus(id, status, motivo_cancelamento) {
+  const body = { status };
+  if (motivo_cancelamento != null && String(motivo_cancelamento).trim()) {
+    body.motivo_cancelamento = String(motivo_cancelamento).trim();
+  }
   const r = await fetch(`${API}/api/orders/${id}/status`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status })
+    body: JSON.stringify(body)
   });
   if (!r.ok) throw new Error('Falha ao atualizar status');
   return r.json();

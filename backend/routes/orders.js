@@ -37,12 +37,23 @@ ordersRouter.get('/', (req, res) => {
 ordersRouter.patch('/:id/status', (req, res) => {
   const db = getDb(req);
   const id = Number(req.params.id);
-  const { status } = req.body || {};
+  const { status, motivo_cancelamento } = req.body || {};
   const valid = ['recebido', 'em_producao', 'pronto', 'saiu_entrega', 'entregue', 'cancelado'];
   if (!valid.includes(status)) return res.status(400).json({ error: 'Status inválido' });
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
   if (!order) return res.status(404).json({ error: 'Pedido não encontrado' });
-  db.prepare('UPDATE orders SET status = ?, updated_at = datetime(\'now\',\'localtime\') WHERE id = ?').run(status, id);
+  if (status === 'cancelado') {
+    const motivo = motivo_cancelamento != null ? String(motivo_cancelamento).trim().slice(0, 800) : null;
+    db.prepare(`
+      UPDATE orders SET status = ?, motivo_cancelamento = ?, updated_at = datetime('now','localtime')
+      WHERE id = ?
+    `).run(status, motivo || null, id);
+  } else {
+    db.prepare(`
+      UPDATE orders SET status = ?, motivo_cancelamento = NULL, updated_at = datetime('now','localtime')
+      WHERE id = ?
+    `).run(status, id);
+  }
   broadcastAll('orders', {});
   broadcastAll('comandas', {});
   res.json({ id, status });

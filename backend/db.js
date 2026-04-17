@@ -141,7 +141,7 @@ export function initDb() {
     CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
   `);
 
-  const orderCols = ['forma_pagamento TEXT'];
+  const orderCols = ['forma_pagamento TEXT', 'motivo_cancelamento TEXT'];
   for (const col of orderCols) {
     try {
       db.exec(`ALTER TABLE orders ADD COLUMN ${col}`);

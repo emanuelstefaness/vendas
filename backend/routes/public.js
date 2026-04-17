@@ -210,6 +210,8 @@ publicRouter.post('/orders', (req, res) => {
   res.status(201).json({
     id: orderId,
     comanda_id: comandaId,
+    tipo,
+    status: 'recebido',
     valor_total: valorTotal,
     message: tipo === 'retirada' ? 'Seu pedido estará disponível para retirada no balcão.' : 'Pedido recebido.'
   });

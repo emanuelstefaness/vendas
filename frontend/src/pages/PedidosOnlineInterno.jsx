@@ -34,6 +34,9 @@ export default function PedidosOnlineInterno() {
   const [filterTipo, setFilterTipo] = useState('') // '' | delivery | retirada
   const [tab, setTab] = useState('todos') // todos | delivery
   const [alert, setAlert] = useState(null)
+  const [cancelDialog, setCancelDialog] = useState(null) // { id } | null
+  const [cancelMotivo, setCancelMotivo] = useState('')
+  const [cancelSaving, setCancelSaving] = useState(false)
   const prevOrdersRef = useRef(0)
 
   const load = async () => {
@@ -68,6 +71,26 @@ export default function PedidosOnlineInterno() {
   const handleStatus = async (orderId, status) => {
     await updateOrderStatus(orderId, status)
     load()
+  }
+
+  const openCancelDialog = (orderId) => {
+    setCancelMotivo('')
+    setCancelDialog({ id: orderId })
+  }
+
+  const confirmCancelOrder = async () => {
+    if (!cancelDialog?.id) return
+    setCancelSaving(true)
+    try {
+      await updateOrderStatus(cancelDialog.id, 'cancelado', cancelMotivo)
+      setCancelDialog(null)
+      setCancelMotivo('')
+      load()
+    } catch (_) {
+      alert('Não foi possível cancelar o pedido.')
+    } finally {
+      setCancelSaving(false)
+    }
   }
 
   const handlePrint = (order) => {
@@ -153,6 +176,11 @@ export default function PedidosOnlineInterno() {
               </ul>
               <p className="mt-2 font-semibold text-slate-800">Total: R$ {Number(order.valor_total).toFixed(2)}</p>
               {order.observacoes && <p className="mt-1 text-sm text-slate-500">Obs: {order.observacoes}</p>}
+              {order.status === 'cancelado' && order.motivo_cancelamento && (
+                <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">
+                  <span className="font-semibold">Motivo do cancelamento:</span> {order.motivo_cancelamento}
+                </p>
+              )}
 
               <div className="mt-4 flex flex-wrap gap-2">
                 {order.status === 'recebido' && (
@@ -176,8 +204,8 @@ export default function PedidosOnlineInterno() {
                   </button>
                 ) : null}
                 {!['entregue', 'cancelado'].includes(order.status) && (
-                  <button type="button" className="btn btn-danger text-sm" onClick={() => handleStatus(order.id, 'cancelado')}>
-                    Cancelar
+                  <button type="button" className="btn btn-danger text-sm" onClick={() => openCancelDialog(order.id)}>
+                    Cancelar / recusar
                   </button>
                 )}
                 <button type="button" className="btn btn-secondary text-sm" onClick={() => handlePrint(order)}>
@@ -186,6 +214,42 @@ export default function PedidosOnlineInterno() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {cancelDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
+            <h2 className="text-lg font-bold text-slate-900">Cancelar ou recusar pedido</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              O cliente verá esta mensagem no acompanhamento do pedido online. Explique o motivo (opcional, mas recomendado).
+            </p>
+            <textarea
+              className="mt-3 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              rows={4}
+              placeholder="Ex.: Item indisponível hoje. / Endereço fora da área de entrega."
+              value={cancelMotivo}
+              onChange={(e) => setCancelMotivo(e.target.value)}
+            />
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700"
+                disabled={cancelSaving}
+                onClick={() => { setCancelDialog(null); setCancelMotivo('') }}
+              >
+                Voltar
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                disabled={cancelSaving}
+                onClick={confirmCancelOrder}
+              >
+                {cancelSaving ? 'Salvando…' : 'Confirmar cancelamento'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
