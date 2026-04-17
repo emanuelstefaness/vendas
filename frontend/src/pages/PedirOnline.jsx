@@ -1006,14 +1006,17 @@ export default function PedirOnline() {
 
       {isCartOpen && (
         <div className="fixed inset-0 z-50 bg-black/45" onClick={() => setIsCartOpen(false)}>
-          <aside className="absolute right-0 top-0 h-full w-full max-w-md bg-white p-4 shadow-float" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-4 flex items-center justify-between">
+          <aside
+            className="absolute right-0 top-0 flex h-full min-h-0 w-full max-w-md flex-col bg-white shadow-float"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-4">
               <h3 className="text-2xl font-semibold">Seu Pedido ({totalItems})</h3>
               <button type="button" onClick={() => setIsCartOpen(false)} className="rounded-lg border px-3 py-1">X</button>
             </div>
-            {cart.length === 0 && <p className="text-slate-600">Carrinho vazio.</p>}
-            {cart.length > 0 && (
-              <>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-3 [-webkit-overflow-scrolling:touch]">
+              {cart.length === 0 && <p className="text-slate-600">Carrinho vazio.</p>}
+              {cart.length > 0 && (
                 <div className="space-y-2">
                   {cart.map((item, i) => (
                     <div key={`${item.id}-${item.user_note || ''}-${i}`} className="rounded-xl border p-3">
@@ -1030,26 +1033,28 @@ export default function PedirOnline() {
                     </div>
                   ))}
                 </div>
-                <div className="mt-4 space-y-1 border-t pt-4 text-sm text-slate-600">
-                  <div className="flex justify-between">
-                    <span>Subtotal (itens)</span>
-                    <span className="font-semibold">{formatPrice(subtotalItens)}</span>
-                  </div>
-                  {taxaEntrega > 0 && (
-                    <div className="flex justify-between">
-                      <span>Taxa de entrega</span>
-                      <span className="font-semibold">{formatPrice(taxaEntrega)}</span>
-                    </div>
-                  )}
-                  <p className="pt-1 text-xl font-semibold text-slate-900">Total: {formatPrice(totalPrice)}</p>
-                  <button type="button" onClick={() => { setIsCartOpen(false); setStep('checkout') }} className="mt-3 w-full rounded-xl bg-black py-3 font-semibold text-white">
-                    Finalizar pedido
-                  </button>
-                  <button type="button" onClick={clearCart} className="mt-2 w-full rounded-xl border border-slate-300 py-2.5 font-semibold text-slate-700">
-                    Limpar carrinho
-                  </button>
+              )}
+            </div>
+            {cart.length > 0 && (
+              <div className="shrink-0 space-y-1 border-t border-slate-200 bg-white px-4 py-4 text-sm text-slate-600">
+                <div className="flex justify-between">
+                  <span>Subtotal (itens)</span>
+                  <span className="font-semibold">{formatPrice(subtotalItens)}</span>
                 </div>
-              </>
+                {taxaEntrega > 0 && (
+                  <div className="flex justify-between">
+                    <span>Taxa de entrega</span>
+                    <span className="font-semibold">{formatPrice(taxaEntrega)}</span>
+                  </div>
+                )}
+                <p className="pt-1 text-xl font-semibold text-slate-900">Total: {formatPrice(totalPrice)}</p>
+                <button type="button" onClick={() => { setIsCartOpen(false); setStep('checkout') }} className="mt-3 w-full rounded-xl bg-black py-3 font-semibold text-white">
+                  Finalizar pedido
+                </button>
+                <button type="button" onClick={clearCart} className="mt-2 w-full rounded-xl border border-slate-300 py-2.5 font-semibold text-slate-700">
+                  Limpar carrinho
+                </button>
+              </div>
             )}
           </aside>
         </div>
