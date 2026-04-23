@@ -45,7 +45,7 @@ const items = [
   // ACOMPANHAMENTOS
   { cat: 'acompanhamentos', name: 'Arroz', price: 12.00, is_kitchen: 1, is_side: 1 },
   { cat: 'acompanhamentos', name: 'Maionese Caseira', price: 15.00, is_kitchen: 1, is_side: 1 },
-  { cat: 'acompanhamentos', name: 'Salada do Bosque', price: 35.90, desc: 'Alface americana e roxa, pepino, cenoura, bacon, queijo e molho.', is_kitchen: 1 },
+  { cat: 'acompanhamentos', name: 'Salada do Bosque', price: 35.90, desc: 'Alface americana e roxa, pepino, cenoura, bacon, queijo e molho.', is_kitchen: 1, is_side: 1 },
   // PRATOS
   { cat: 'pratos', name: 'Prato Feito do Bosque', price: 39.90, desc: 'Espetinho da preferência + arroz + maionese + salada.', is_prato_feito: 1, is_kitchen: 1, is_grill: 1 },
   { cat: 'pratos', name: 'Arvoredo', price: 219.90, desc: '700g filé argentino na brasa. Arroz, maionese, salada. Serve 2 pessoas.', requires_meat_point: 1, is_arvoredo: 1, is_grill: 1, is_kitchen: 1 },
@@ -87,6 +87,14 @@ const items = [
   // Doses avulsas (bar — mesmo preço que refrigerantes; IDs novos no fim do seed)
   { cat: 'doses', name: 'Red Bull', price: 18.0, is_bar: 1 },
   { cat: 'doses', name: 'Coca-Cola 350ml', price: 8.0, is_bar: 1 },
+  {
+    cat: 'lanches',
+    name: 'Churraspão de coração',
+    price: 36.9,
+    desc: 'Baguete crocante recheada com coração de galinha suculento, pasta de alho Santa Massa, alface americana fresca e uma generosa camada de queijo gratinado.',
+    is_grill: 1,
+    is_kitchen: 1
+  },
 ];
 
 const insItem = db.prepare(`

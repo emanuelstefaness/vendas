@@ -7,17 +7,36 @@ const getDb = (req) => req.app.get('db');
 comandasRouter.get('/', (req, res) => {
   const db = getDb(req);
   const list = db.prepare(`
-    SELECT c.*, 
-      (SELECT COUNT(*) FROM pedidos p WHERE p.comanda_id = c.id AND p.status != 'cancelled') as pedidos_count,
-      (SELECT SUM(p.quantity * p.unit_price) FROM pedidos p WHERE p.comanda_id = c.id AND p.status != 'cancelled') as total_pedidos
+    SELECT c.*,
+      COALESCE(a.pedidos_count, 0) AS pedidos_count,
+      COALESCE(a.total_pedidos, 0) AS total_pedidos
     FROM comandas c
+    LEFT JOIN (
+      SELECT comanda_id,
+        COUNT(*) AS pedidos_count,
+        SUM(quantity * unit_price) AS total_pedidos
+      FROM pedidos
+      WHERE status != 'cancelled'
+      GROUP BY comanda_id
+    ) a ON a.comanda_id = c.id
     ORDER BY c.id
   `).all();
+  const map = new Map(list.map((row) => [Number(row.id), row]));
   const byId = {};
+  const empty = (id) => ({
+    id,
+    mesa: null,
+    status: 'closed',
+    closed_at: null,
+    pedidos_count: 0,
+    total_pedidos: 0,
+  });
   for (let i = 1; i <= 200; i++) {
-    byId[i] = list.find(c => Number(c.id) === i) || { id: i, mesa: null, status: 'closed', closed_at: null, pedidos_count: 0, total_pedidos: 0 };
+    byId[i] = map.get(i) || empty(i);
   }
-  list.filter(c => c.id > 200).forEach(c => { byId[c.id] = c; });
+  list.filter((c) => Number(c.id) > 200).forEach((c) => {
+    byId[c.id] = c;
+  });
   res.json(byId);
 });
 

@@ -8,6 +8,7 @@ import Churrasqueira from './pages/Churrasqueira'
 import Bar from './pages/Bar'
 import Caixa from './pages/Caixa'
 import Admin from './pages/Admin'
+import Financeiro from './pages/Financeiro'
 import Cardapio from './pages/Cardapio'
 import TvChurrasqueira from './pages/TvChurrasqueira'
 import TvCozinha from './pages/TvCozinha'
@@ -52,6 +53,7 @@ function App() {
               <NavLink to="/cardapio" className={({ isActive }) => `rounded-lg px-3 py-2 text-sm font-medium ${isActive ? 'bg-amber-50 text-amber-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}>Cardápio</NavLink>
               <NavLink to="/pedidos-online" className={({ isActive }) => `rounded-lg px-3 py-2 text-sm font-medium ${isActive ? 'bg-amber-50 text-amber-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}>Pedidos online</NavLink>
               <NavLink to="/admin" className={({ isActive }) => `rounded-lg px-3 py-2 text-sm font-medium ${isActive ? 'bg-amber-50 text-amber-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}>Relatórios</NavLink>
+              <NavLink to="/financeiro" className={({ isActive }) => `rounded-lg px-3 py-2 text-sm font-medium ${isActive ? 'bg-amber-50 text-amber-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}>Financeiro</NavLink>
             </>
           )}
           <span className="ml-auto flex items-center gap-2">
@@ -82,6 +84,7 @@ function App() {
           <Route path="/cardapio" element={<SemAcessoGarcom><Cardapio /></SemAcessoGarcom>} />
           <Route path="/pedidos-online" element={<SemAcessoGarcom><PedidosOnlineInterno /></SemAcessoGarcom>} />
           <Route path="/admin" element={<SemAcessoGarcom><Admin /></SemAcessoGarcom>} />
+          <Route path="/financeiro" element={<SemAcessoGarcom><Financeiro /></SemAcessoGarcom>} />
           <Route path="/tv/churrasqueira" element={<TvChurrasqueira />} />
           <Route path="/tv/cozinha" element={<TvCozinha />} />
           <Route path="/tv/bar" element={<TvBar />} />

@@ -1,6 +1,61 @@
-/** `comanda_tipo_online` vindo do JOIN em pedidos: 'delivery' | 'retirada' | null (salão). */
+/** `comanda_tipo_online` vindo da API (delivery | retirada | null). Aceita alias do objeto. */
 export function tipoOnlineFromPedido(p) {
-  return p?.comanda_tipo_online ?? null
+  const raw = p?.comanda_tipo_online ?? p?.tipo_online
+  if (raw == null || String(raw).trim() === '') return null
+  const t = String(raw).trim().toLowerCase()
+  if (t === 'delivery') return 'delivery'
+  if (t === 'retirada') return 'retirada'
+  return null
+}
+
+export function isTipoPedidoOnline(tipo) {
+  return tipo === 'delivery' || tipo === 'retirada'
+}
+
+export function isPedidoOnline(p) {
+  return isTipoPedidoOnline(tipoOnlineFromPedido(p))
+}
+
+/** Faixa no topo do card (Cozinha, colunas, TV): título + subtítulo. */
+export function pedidoOnlineBannerModel(tipo) {
+  if (!isTipoPedidoOnline(tipo)) return null
+  if (tipo === 'delivery') {
+    return {
+      wrap: 'mb-2 rounded-lg border-2 border-sky-600 bg-sky-200 px-3 py-2 text-center shadow-sm',
+      titleClass: 'text-sm font-black uppercase tracking-wide text-sky-950',
+      title: 'Pedido online — entrega (delivery)',
+      subtitleClass: 'mt-0.5 text-xs font-semibold leading-snug text-sky-900',
+      subtitle: 'Embalar / preparar para envio ao cliente — não é consumo na mesa',
+    }
+  }
+  return {
+    wrap: 'mb-2 rounded-lg border-2 border-teal-600 bg-teal-200 px-3 py-2 text-center shadow-sm',
+    titleClass: 'text-sm font-black uppercase tracking-wide text-teal-950',
+    title: 'Pedido online — retirada no balcão',
+    subtitleClass: 'mt-0.5 text-xs font-semibold leading-snug text-teal-900',
+    subtitle: 'Cliente retira aqui — organizar pedido para retirada',
+  }
+}
+
+/** Faixa larga para TV. */
+export function pedidoOnlineTvBannerModel(tipo) {
+  if (!isTipoPedidoOnline(tipo)) return null
+  if (tipo === 'delivery') {
+    return {
+      wrap: 'mb-3 rounded-xl border-2 border-sky-700 bg-sky-200 px-4 py-3 text-center',
+      titleClass: 'text-xl font-black uppercase tracking-wide text-sky-950',
+      title: 'Pedido online — delivery (entrega)',
+      subtitleClass: 'mt-1 text-base font-bold text-sky-900',
+      subtitle: 'Embalar — envio ao cliente',
+    }
+  }
+  return {
+    wrap: 'mb-3 rounded-xl border-2 border-teal-700 bg-teal-200 px-4 py-3 text-center',
+    titleClass: 'text-xl font-black uppercase tracking-wide text-teal-950',
+    title: 'Pedido online — retirada',
+    subtitleClass: 'mt-1 text-base font-bold text-teal-900',
+    subtitle: 'Cliente retira no balcão',
+  }
 }
 
 export function comandaOnlineLabel(tipo) {

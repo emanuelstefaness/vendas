@@ -75,6 +75,8 @@ export function initDb() {
       caipirinha_picole INTEGER DEFAULT 0,
       dose_accompaniment TEXT,
       prato_feito_espetinho_id INTEGER,
+      extra_caramelized_onion INTEGER DEFAULT 0,
+      extra_hamburger INTEGER DEFAULT 0,
       status TEXT DEFAULT 'pending',
       sector TEXT,
       created_at TEXT DEFAULT (datetime('now','localtime')),
@@ -171,6 +173,15 @@ export function initDb() {
     }
   }
 
+  const pedidoAddonCols = ['extra_caramelized_onion INTEGER DEFAULT 0', 'extra_hamburger INTEGER DEFAULT 0'];
+  for (const col of pedidoAddonCols) {
+    try {
+      db.exec(`ALTER TABLE pedidos ADD COLUMN ${col}`);
+    } catch (e) {
+      if (!e.message || !e.message.includes('duplicate column')) throw e;
+    }
+  }
+
   // Bar: fila só para categorias do bar; remove status bar de itens fora da lista
   const barSlugSql = sqlQuotedList(BAR_CATEGORY_SLUGS);
   try {
@@ -259,4 +270,56 @@ export function initDb() {
   } catch (e) {
     console.warn('Migração doses Red Bull/Coca:', e.message);
   }
+
+  try {
+    db.exec(`
+      UPDATE items SET is_side = 1
+      WHERE name = 'Salada do Bosque'
+      AND id IN (
+        SELECT i.id FROM items i
+        JOIN categories c ON c.id = i.category_id
+        WHERE c.slug = 'acompanhamentos'
+      )
+      AND (is_side IS NULL OR is_side = 0)
+    `);
+  } catch (e) {
+    console.warn('Migração Salada do Bosque is_side:', e.message);
+  }
+
+  // Lanche em destaque no pedir online
+  try {
+    const lanchesCat = db.prepare('SELECT id FROM categories WHERE slug = ?').get('lanches');
+    if (lanchesCat) {
+      const desc =
+        'Baguete crocante recheada com coração de galinha suculento, pasta de alho Santa Massa, alface americana fresca e uma generosa camada de queijo gratinado.';
+      const has = db.prepare('SELECT 1 FROM items WHERE name = ?').get('Churraspão de coração');
+      if (!has) {
+        db.prepare(`
+          INSERT INTO items (category_id, name, price, description, requires_meat_point, is_grill, is_kitchen, is_bar, is_side, is_prato_feito, is_arvoredo)
+          VALUES (?, 'Churraspão de coração', 36.90, ?, 0, 1, 1, 0, 0, 0, 0)
+        `).run(lanchesCat.id, desc);
+      }
+    }
+  } catch (e) {
+    console.warn('Migração Churraspão de coração:', e.message);
+  }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS finance_expenses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      business_date TEXT NOT NULL,
+      description TEXT NOT NULL,
+      amount REAL NOT NULL,
+      created_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+    CREATE TABLE IF NOT EXISTS finance_income_manual (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      business_date TEXT NOT NULL,
+      description TEXT NOT NULL,
+      amount REAL NOT NULL,
+      created_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_finance_exp_bd ON finance_expenses(business_date);
+    CREATE INDEX IF NOT EXISTS idx_finance_inc_bd ON finance_income_manual(business_date);
+  `);
 }

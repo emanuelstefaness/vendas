@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { getPedidosGrill, getProductionGrill, setPedidoSectorStatus } from '../api'
+import { getPedidosGrill, getProductionGrill, markPedidoChurrasqueiraReady } from '../api'
 import { useSocket } from '../socket'
 import PedidoElapsed, { earliestCreatedAt } from '../components/PedidoElapsed'
-import { churrasqueiraComandaColumnClass, comandaOnlineLabel } from '../utils/comandaOnlineVisual'
+import { churrasqueiraComandaColumnClass, comandaOnlineLabel, isTipoPedidoOnline, pedidoOnlineBannerModel } from '../utils/comandaOnlineVisual'
+import { observacaoParaProducao } from '../utils/productionObservations'
+import { textoResumoAddonsPedido } from '../utils/lancheAddons'
 
 /** Agrupa por comanda mantendo ordem de lançamento (primeiro pedido na fila define a ordem dos cards). Não usar Object + comanda_id numérico: o JS reordena chaves inteiras. */
 function groupByComanda(list) {
@@ -22,8 +24,9 @@ function groupByComanda(list) {
 function groupItemsByProduct(items) {
   const map = {}
   items.forEach((p) => {
-    const base = p.prato_feito_espetinho_name ? `Prato Feito — ${p.prato_feito_espetinho_name}` : p.item_name
-    const obs = p.observations ? String(p.observations).trim() : ''
+    const add = textoResumoAddonsPedido(p)
+    const base = p.prato_feito_espetinho_name ? `Prato Feito — ${p.prato_feito_espetinho_name}` : `${p.item_name}${add}`
+    const obs = observacaoParaProducao(p.observations)
     const label = obs ? `${base} — ${obs}` : base
     if (!map[label]) {
       map[label] = { label, displayBase: base, observation: obs || null, total: 0, byPoint: {}, pedidos: [] }
@@ -135,26 +138,13 @@ export default function Churrasqueira() {
     })
   }
 
-  const setStatus = async (pedidoId, status) => {
-    if (status === 'ready') {
-      const pedido = list.find((p) => p.id === pedidoId)
-      if (pedido) subtractFromProduction([pedido])
-      setList((prev) => prev.filter((p) => p.id !== pedidoId))
-    }
-    try {
-      await setPedidoSectorStatus(pedidoId, 'grill', status)
-      load()
-    } catch {
-      load()
-    }
-  }
-
   const setCardAllReady = async (items) => {
+    if (items.length === 0) return
     const ids = new Set(items.map((i) => i.id))
     subtractFromProduction(items)
     setList((prev) => prev.filter((p) => !ids.has(p.id)))
     try {
-      await Promise.all(items.map((p) => setPedidoSectorStatus(p.id, 'grill', 'ready')))
+      await Promise.all(items.map((p) => markPedidoChurrasqueiraReady(p.id)))
       if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current)
       loadTimeoutRef.current = setTimeout(() => { load(); loadTimeoutRef.current = null }, 150)
     } catch {
@@ -163,12 +153,12 @@ export default function Churrasqueira() {
   }
 
   const markOneReady = async (pedidos) => {
-    if (!pedidos.length) return
-    const one = pedidos[0]
+    const one = pedidos.find((p) => !Number(p.is_side)) ?? pedidos[0]
+    if (!one) return
     subtractFromProduction([one])
     setList((prev) => prev.filter((p) => p.id !== one.id))
     try {
-      await setPedidoSectorStatus(one.id, 'grill', 'ready')
+      await markPedidoChurrasqueiraReady(one.id)
       load()
     } catch {
       load()
@@ -180,21 +170,43 @@ export default function Churrasqueira() {
   return (
     <div className="relative flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-gradient-to-br from-stone-200 via-amber-100/90 to-amber-50">
       <div className={`flex min-h-0 flex-1 flex-col overflow-hidden px-1 transition-[padding] sm:px-2 ${totalMinimized ? 'pr-0' : 'pr-52'}`}>
-        <h1 className="mb-3 shrink-0 px-1 text-xl font-bold text-amber-900/90">Churrasqueira</h1>
+        <div className="mb-3 flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 px-1">
+          <h1 className="text-xl font-bold text-amber-900/90">Churrasqueira</h1>
+          <span
+            className="rounded-full border border-amber-300/80 bg-amber-100/90 px-2.5 py-0.5 text-sm font-semibold text-amber-950 shadow-sm tabular-nums"
+            title="Total de cards de comanda na fila"
+          >
+            {totalCards} {totalCards === 1 ? 'comanda na fila' : 'comandas na fila'}
+          </span>
+        </div>
         <div className="flex min-h-0 flex-1 flex-row gap-4 overflow-x-auto overflow-y-auto pb-3">
-        {cards.map((card) => (
+        {cards.map((card) => {
+          const tipoOn = card.items[0]?.comanda_tipo_online
+          const colBanner = pedidoOnlineBannerModel(tipoOn)
+          return (
           <div
             key={card.comanda_id}
-            className={churrasqueiraComandaColumnClass(card.items[0]?.comanda_tipo_online)}
+            className={churrasqueiraComandaColumnClass(tipoOn)}
           >
+            {colBanner && (
+              <div className={colBanner.wrap}>
+                <p className={colBanner.titleClass}>{colBanner.title}</p>
+                <p className={colBanner.subtitleClass}>{colBanner.subtitle}</p>
+              </div>
+            )}
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
-                <span className={`text-base font-bold ${card.items[0]?.comanda_tipo_online === 'delivery' ? 'text-sky-800' : card.items[0]?.comanda_tipo_online === 'retirada' ? 'text-teal-900' : 'text-amber-700'}`}>
+                <span className={`text-base font-bold ${tipoOn === 'delivery' ? 'text-sky-800' : tipoOn === 'retirada' ? 'text-teal-900' : 'text-amber-700'}`}>
                   Comanda {card.comanda_id} — Mesa {card.mesa}
                 </span>
-                {comandaOnlineLabel(card.items[0]?.comanda_tipo_online) && (
+                {isTipoPedidoOnline(tipoOn) && (
+                  <span className="ml-2 inline-block rounded-full bg-violet-200/90 px-2 py-0.5 text-[10px] font-black uppercase text-violet-900">
+                    Pedir online
+                  </span>
+                )}
+                {comandaOnlineLabel(tipoOn) && (
                   <span className="ml-2 inline-block rounded-full bg-black/10 px-2 py-0.5 text-[11px] font-bold text-slate-800">
-                    {comandaOnlineLabel(card.items[0]?.comanda_tipo_online)}
+                    {comandaOnlineLabel(tipoOn)}
                   </span>
                 )}
                 {card.items[0]?.waiter_name && <span className="ml-2 text-slate-500 text-xs">Garçom: {card.items[0].waiter_name}</span>}
@@ -216,6 +228,9 @@ export default function Churrasqueira() {
                   <span className="min-w-0 flex-1 text-sm">
                     <span className="font-semibold text-slate-800">{g.total}</span>{' '}
                     <span className="text-slate-800">{g.displayBase}</span>
+                    {g.pedidos.some((x) => Number(x.is_side)) && (
+                      <span className="ml-1.5 inline-block rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-sky-900">Cozinha</span>
+                    )}
                     <span className="ml-1 text-amber-600 text-xs">{formatByPoint(g.byPoint)}</span>
                     {g.observation && (
                       <p className="mt-1 rounded-md border border-violet-200/80 bg-violet-50 px-2 py-1 text-xs font-semibold leading-snug text-violet-800">
@@ -249,7 +264,8 @@ export default function Churrasqueira() {
               ))}
             </ul>
           </div>
-        ))}
+          );
+        })}
         </div>
         {cards.length === 0 && (
           <p className="py-8 text-center text-slate-500">Nenhum pedido no momento.</p>

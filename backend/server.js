@@ -15,6 +15,7 @@ import { printRouter } from './routes/print.js';
 import { waitersRouter } from './routes/waiters.js';
 import { publicRouter } from './routes/public.js';
 import { ordersRouter } from './routes/orders.js';
+import { financeRouter } from './routes/finance.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 initDb();
@@ -60,6 +61,7 @@ app.use('/api/print', printRouter);
 app.use('/api/waiters', waitersRouter);
 app.use('/api/public', publicRouter);
 app.use('/api/orders', ordersRouter);
+app.use('/api/finance', financeRouter);
 
 app.get('/api/health', (_, res) => res.json({ ok: true }));
 

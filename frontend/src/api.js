@@ -260,6 +260,17 @@ export async function setPedidoSectorStatus(pedidoId, sector, status) {
   return r.json();
 }
 
+/** Marca pronto na Churrasqueira (setor correto conforme item no servidor; acompanhamentos → cozinha). */
+export async function markPedidoChurrasqueiraReady(pedidoId) {
+  const r = await fetch(`${API}/api/pedidos/churrasqueira-ready/${pedidoId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || 'Falha ao marcar pronto');
+  return data;
+}
+
 export async function getPedidosKitchen() {
   const r = await fetch(`${API}/api/pedidos/kitchen`);
   if (!r.ok) throw new Error('Falha ao carregar');
@@ -381,5 +392,53 @@ export async function getReportsPorGarcom(from, to) {
 export async function getReportsCancelamentos(from, to) {
   const r = await fetch(`${API}/api/reports/cancelamentos?${reportsRangeQuery(from, to)}`);
   if (!r.ok) throw new Error('Falha');
+  return r.json();
+}
+
+export async function getFinanceDaily(from, to) {
+  const q = reportsRangeQuery(from, to);
+  const r = await fetch(`${API}/api/finance/daily?${q}`);
+  if (!r.ok) throw new Error('Falha ao carregar financeiro');
+  return r.json();
+}
+
+export async function getFinanceEntries(from, to) {
+  const q = reportsRangeQuery(from, to);
+  const r = await fetch(`${API}/api/finance/entries?${q}`);
+  if (!r.ok) throw new Error('Falha ao carregar lançamentos');
+  return r.json();
+}
+
+export async function postFinanceExpense(body) {
+  const r = await fetch(`${API}/api/finance/expenses`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || 'Falha ao registrar despesa');
+  return data;
+}
+
+export async function postFinanceIncomeManual(body) {
+  const r = await fetch(`${API}/api/finance/income-manual`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || 'Falha ao registrar entrada');
+  return data;
+}
+
+export async function deleteFinanceExpense(id) {
+  const r = await fetch(`${API}/api/finance/expenses/${id}`, { method: 'DELETE' });
+  if (!r.ok) throw new Error('Falha ao excluir');
+  return r.json();
+}
+
+export async function deleteFinanceIncomeManual(id) {
+  const r = await fetch(`${API}/api/finance/income-manual/${id}`, { method: 'DELETE' });
+  if (!r.ok) throw new Error('Falha ao excluir');
   return r.json();
 }

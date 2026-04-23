@@ -1,3 +1,5 @@
+import { textoResumoAddonsPedido } from './lancheAddons'
+
 /** Largura útil da comanda (bobina 80 mm) — igual ao Caixa / impressão interna */
 export const COMANDA_IMPRESSAO_LARGURA_MM = 80
 
@@ -172,8 +174,9 @@ export function buildComandaPrintHtml(d) {
 
   const rows = pedidos
     .map((p) => {
+      const add = textoResumoAddonsPedido(p)
       const obs = p.observations ? ` (${String(p.observations)})` : ''
-      const nome = escHtml(`${p.item_name}${obs}`)
+      const nome = escHtml(`${p.item_name}${add}${obs}`)
       const linha = `${p.quantity}×`
       const sub = fmtMoney(p.quantity * p.unit_price)
       return `<tr><td class="q">${linha}</td><td class="d">${nome}</td><td class="v">R$ ${sub}</td></tr>`
@@ -181,6 +184,10 @@ export function buildComandaPrintHtml(d) {
     .join('')
 
   const dh = fmtDataHora(d.printed_at)
+  const cpfRaw = String(d.client_cpf ?? '').trim()
+  const cpfBlock = cpfRaw
+    ? `<div class="info-block" style="margin-top:0;border-bottom:1px solid #000;"><div><span class="lab">CPF (NFC-e):</span> ${escHtml(cpfRaw)}</div></div>`
+    : ''
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -198,6 +205,7 @@ export function buildComandaPrintHtml(d) {
       <span>Comanda ${escHtml(d.comanda)}</span>
       <span>Mesa ${escHtml(d.mesa ?? '—')}</span>
     </div>
+    ${cpfBlock}
     <table class="itens" role="presentation"><tbody>${rows}</tbody></table>
 
     <div class="totais">

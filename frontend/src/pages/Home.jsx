@@ -15,6 +15,7 @@ export default function Home() {
     { to: '/churrasqueira', label: 'Churrasqueira', desc: 'Espetinhos e carnes', icon: '🔥' },
     { to: '/bar', label: 'Bar', desc: 'Bebidas e drinks', icon: '🍹' },
     { to: '/admin', label: 'Relatórios', desc: 'Vendas e faturamento', icon: '📊' },
+    { to: '/financeiro', label: 'Financeiro', desc: 'Despesas, entradas e lucro por dia', icon: '💹' },
   ]
   const modulesGarcom = [
     { to: '/garcons', label: 'Comandas e pedidos', desc: 'Abrir mesa e lançar pedidos', icon: '📱' },

@@ -38,6 +38,7 @@ printRouter.get('/comanda/:id', (req, res) => {
     logo: 'BOSQUE DA CARNE',
     comanda: id,
     mesa: comanda.mesa,
+    client_cpf: comanda.client_cpf != null && String(comanda.client_cpf).trim() ? String(comanda.client_cpf).trim() : null,
     pedidos,
     subtotal,
     people_count: peopleCount,

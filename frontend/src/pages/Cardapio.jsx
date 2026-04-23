@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   getCategories,
   getItems,
@@ -19,6 +19,8 @@ export default function Cardapio() {
   const [modalCat, setModalCat] = useState(null) // null | { type: 'new' } | { type: 'edit', id, name, slug, sort_order }
   const [modalItem, setModalItem] = useState(null) // null | { type: 'new' } | { type: 'edit', item }
   const [filterCategoryId, setFilterCategoryId] = useState('') // '' = todas
+  const [itemModalKey, setItemModalKey] = useState(0)
+  const itemsFetchSeq = useRef(0)
 
   const load = async () => {
     setLoading(true)
@@ -37,16 +39,19 @@ export default function Cardapio() {
   useEffect(() => { load() }, [])
 
   const loadItems = async () => {
+    const seq = ++itemsFetchSeq.current
     try {
       const list = await getItems(filterCategoryId ? Number(filterCategoryId) : undefined)
+      if (seq !== itemsFetchSeq.current) return
       setItems(list)
     } catch (e) {
+      if (seq !== itemsFetchSeq.current) return
       setError(e.message || 'Falha ao carregar itens')
     }
   }
 
   useEffect(() => {
-    if (tab === 'itens') loadItems()
+    if (tab === 'itens') void loadItems()
   }, [tab, filterCategoryId])
 
   const handleSaveCategory = async (payload) => {
@@ -177,11 +182,18 @@ export default function Cardapio() {
               >
                 <option value="">Todas as categorias</option>
                 {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <option key={c.id} value={String(c.id)}>{c.name}</option>
                 ))}
               </select>
             </div>
-            <button type="button" className="btn btn-primary" onClick={() => setModalItem({ type: 'new' })}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                setItemModalKey((k) => k + 1)
+                setModalItem({ type: 'new' })
+              }}
+            >
               Novo item
             </button>
           </div>
@@ -230,6 +242,7 @@ export default function Cardapio() {
 
       {modalItem && (
         <ModalItem
+          key={modalItem.type === 'edit' ? `item-edit-${modalItem.item.id}` : `item-new-${itemModalKey}`}
           modal={modalItem}
           categories={categories}
           onClose={() => setModalItem(null)}
@@ -271,27 +284,71 @@ function ModalCategoria({ modal, onClose, onSave }) {
   )
 }
 
+function firstCategoryId(cats) {
+  if (!cats || !cats.length) return ''
+  const id = cats[0].id
+  return id != null ? String(id) : ''
+}
+
 function ModalItem({ modal, categories, onClose, onSave }) {
   const isEdit = modal.type === 'edit'
-  const item = isEdit ? modal.item : {}
-  const [name, setName] = useState(isEdit ? item.name : '')
-  const [category_id, setCategory_id] = useState(isEdit ? String(item.category_id) : (categories[0] ? String(categories[0].id) : ''))
-  const [price, setPrice] = useState(isEdit ? String(item.price) : '')
-  const [description, setDescription] = useState(isEdit ? (item.description || '') : '')
-  const [requires_meat_point, setRequires_meat_point] = useState(!!item.requires_meat_point)
-  const [is_grill, setIs_grill] = useState(!!item.is_grill)
-  const [is_kitchen, setIs_kitchen] = useState(!!item.is_kitchen)
-  const [is_bar, setIs_bar] = useState(!!item.is_bar)
-  const [is_side, setIs_side] = useState(!!item.is_side)
-  const [is_prato_feito, setIs_prato_feito] = useState(!!item.is_prato_feito)
+  const item = isEdit ? modal.item : null
+  const [name, setName] = useState('')
+  const [category_id, setCategory_id] = useState('')
+  const [price, setPrice] = useState('')
+  const [description, setDescription] = useState('')
+  const [requires_meat_point, setRequires_meat_point] = useState(false)
+  const [is_grill, setIs_grill] = useState(false)
+  const [is_kitchen, setIs_kitchen] = useState(false)
+  const [is_bar, setIs_bar] = useState(false)
+  const [is_side, setIs_side] = useState(false)
+  const [is_prato_feito, setIs_prato_feito] = useState(false)
+
+  useEffect(() => {
+    if (isEdit && item) {
+      setName(item.name || '')
+      setCategory_id(item.category_id != null ? String(item.category_id) : '')
+      setPrice(item.price != null && item.price !== '' ? String(item.price) : '')
+      setDescription(item.description || '')
+      setRequires_meat_point(!!item.requires_meat_point)
+      setIs_grill(!!item.is_grill)
+      setIs_kitchen(!!item.is_kitchen)
+      setIs_bar(!!item.is_bar)
+      setIs_side(!!item.is_side)
+      setIs_prato_feito(!!item.is_prato_feito)
+      return
+    }
+    setName('')
+    setPrice('')
+    setDescription('')
+    setRequires_meat_point(false)
+    setIs_grill(false)
+    setIs_kitchen(false)
+    setIs_bar(false)
+    setIs_side(false)
+    setIs_prato_feito(false)
+    setCategory_id(firstCategoryId(categories))
+  }, [isEdit, item?.id, modal.type])
+
+  useEffect(() => {
+    if (isEdit || !categories.length) return
+    setCategory_id((prev) => {
+      if (prev && categories.some((c) => String(c.id) === prev)) return prev
+      return firstCategoryId(categories)
+    })
+  }, [isEdit, categories])
 
   const submit = (e) => {
     e.preventDefault()
-    const catId = parseInt(category_id, 10)
-    const p = parseFloat(price.replace(',', '.'))
-    if (!catId || Number.isNaN(p) || p < 0) return
+    const catId = parseInt(String(category_id), 10)
+    const p = parseFloat(String(price).replace(',', '.'))
+    if (!Number.isFinite(catId) || catId < 1 || Number.isNaN(p) || p < 0) {
+      return
+    }
     onSave({ category_id: catId, name: name.trim(), price: p, description: description.trim() || null, requires_meat_point, is_grill, is_kitchen, is_bar, is_side, is_prato_feito })
   }
+
+  const categoryValid = categories.some((c) => String(c.id) === String(category_id))
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 overflow-y-auto">
@@ -299,8 +356,20 @@ function ModalItem({ modal, categories, onClose, onSave }) {
         <h3 className="mb-3 text-lg font-bold text-slate-800">{isEdit ? 'Editar item' : 'Novo item'}</h3>
         <form onSubmit={submit}>
           <label className="block text-sm font-medium text-slate-700 mb-1">Categoria</label>
-          <select value={category_id} onChange={(e) => setCategory_id(e.target.value)} className="mb-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800" required>
-            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          <select
+            value={categoryValid ? String(category_id) : ''}
+            onChange={(e) => setCategory_id(e.target.value)}
+            className="mb-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800"
+            required
+            disabled={!categories.length}
+          >
+            {!categories.length ? (
+              <option value="">Carregando categorias…</option>
+            ) : (
+              categories.map((c) => (
+                <option key={c.id} value={String(c.id)}>{c.name}</option>
+              ))
+            )}
           </select>
           <label className="block text-sm font-medium text-slate-700 mb-1">Nome</label>
           <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="mb-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800" required />
@@ -318,7 +387,9 @@ function ModalItem({ modal, categories, onClose, onSave }) {
           </div>
           <div className="flex gap-2">
             <button type="button" className="btn btn-secondary flex-1" onClick={onClose}>Cancelar</button>
-            <button type="submit" className="btn btn-primary flex-1">Salvar</button>
+            <button type="submit" className="btn btn-primary flex-1" disabled={!categories.length || !categoryValid}>
+              Salvar
+            </button>
           </div>
         </form>
       </div>

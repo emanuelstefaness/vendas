@@ -2,24 +2,28 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { getPedidosKitchen, setPedidoSectorStatus, updatePedido } from '../api'
 import { useSocket } from '../socket'
 import PedidoElapsed, { earliestCreatedAt } from '../components/PedidoElapsed'
-import { cozinhaPedidoCardClass, comandaOnlineLabel } from '../utils/comandaOnlineVisual'
+import { cozinhaPedidoCardClass, comandaOnlineLabel, isPedidoOnline, pedidoOnlineBannerModel, tipoOnlineFromPedido } from '../utils/comandaOnlineVisual'
+import { observacaoParaProducao } from '../utils/productionObservations'
+import { textoResumoAddonsPedido } from '../utils/lancheAddons'
 
-/** Totais por item + linhas "q — descrição" quando há observations */
+/** Totais por item + linhas "q — descrição" quando há observação útil (sem ruído de combo) + qtd delivery. */
 function buildKitchenProductionCards(pedidos) {
   const byName = new Map()
   for (const p of pedidos) {
-    const name = p.item_name || '—'
+    const name = (p.item_name || '—') + textoResumoAddonsPedido(p)
     const qty = Math.max(1, Number(p.quantity) || 1)
-    const obsRaw = p.observations != null ? String(p.observations).trim() : ''
-    if (!byName.has(name)) byName.set(name, { name, total: 0, descMap: new Map() })
+    const obsUse = observacaoParaProducao(p.observations)
+    if (!byName.has(name)) byName.set(name, { name, total: 0, deliveryTotal: 0, descMap: new Map() })
     const row = byName.get(name)
     row.total += qty
-    if (obsRaw) row.descMap.set(obsRaw, (row.descMap.get(obsRaw) || 0) + qty)
+    if (tipoOnlineFromPedido(p) === 'delivery') row.deliveryTotal += qty
+    if (obsUse) row.descMap.set(obsUse, (row.descMap.get(obsUse) || 0) + qty)
   }
   return Array.from(byName.values())
     .map((row) => ({
       name: row.name,
       total: row.total,
+      deliveryTotal: row.deliveryTotal,
       lines: [...row.descMap.entries()]
         .map(([text, q]) => ({ qty: q, text }))
         .sort((a, b) => b.qty - a.qty || a.text.localeCompare(b.text))
@@ -27,21 +31,23 @@ function buildKitchenProductionCards(pedidos) {
     .sort((a, b) => b.total - a.total)
 }
 
-/** Card Prato Feito: total + só linhas de descrição livre (observations); sem espetinho nem ponto */
+/** Card Prato Feito: total + só observação livre (sem combo/PF automático) + qtd delivery. */
 function buildPratoFeitoProductionSummary(pedidos) {
   let total = 0
+  let deliveryTotal = 0
   const descMap = new Map()
   for (const p of pedidos) {
     const qty = Math.max(1, Number(p.quantity) || 1)
     total += qty
-    const obs = p.observations != null ? String(p.observations).trim() : ''
+    if (tipoOnlineFromPedido(p) === 'delivery') deliveryTotal += qty
+    const obs = observacaoParaProducao(p.observations)
     if (obs) descMap.set(obs, (descMap.get(obs) || 0) + qty)
   }
   if (total <= 0) return null
   const lines = [...descMap.entries()]
     .map(([text, q]) => ({ qty: q, text }))
     .sort((a, b) => b.qty - a.qty || a.text.localeCompare(b.text))
-  return { total, lines }
+  return { total, lines, deliveryTotal }
 }
 
 export default function Cozinha() {
@@ -115,6 +121,11 @@ export default function Cozinha() {
     () => pratoFeitoPedidos.some((p) => p.comanda_tipo_online === 'delivery'),
     [pratoFeitoPedidos]
   )
+  const pratoFeitoTemRetirada = useMemo(
+    () => pratoFeitoPedidos.some((p) => p.comanda_tipo_online === 'retirada'),
+    [pratoFeitoPedidos]
+  )
+  const pratoFeitoTemOnline = pratoFeitoTemDelivery || pratoFeitoTemRetirada
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col">
@@ -125,7 +136,12 @@ export default function Cozinha() {
           {productionByItem.map((p) => (
             <div key={p.name} className="flex flex-col rounded-xl bg-slate-100 px-3 py-3 text-center">
               <span className="block text-2xl font-bold text-slate-800 md:text-3xl">{p.total}</span>
-              <span className="text-base font-medium text-slate-600">{p.name}</span>
+              {p.deliveryTotal > 0 && (
+                <span className="mx-auto mt-1 inline-flex max-w-full items-center justify-center rounded-lg bg-sky-600 px-2.5 py-1 text-[11px] font-black uppercase leading-tight tracking-wide text-white shadow-md ring-2 ring-sky-300/80">
+                  🚚 {p.deliveryTotal} delivery{p.deliveryTotal !== p.total ? ` · ${p.total - p.deliveryTotal} salão` : ''}
+                </span>
+              )}
+              <span className="mt-1 text-base font-medium text-slate-600">{p.name}</span>
               {p.lines.length > 0 && (
                 <ul className="mt-2 space-y-1 border-t border-slate-200/90 pt-2 text-left text-xs font-medium text-slate-600">
                   {p.lines.map((l) => (
@@ -140,7 +156,15 @@ export default function Cozinha() {
           {pratoFeitoSummary && (
             <div key="prato-feito" className="flex flex-col rounded-xl bg-amber-100 px-3 py-3 text-center">
               <span className="block text-2xl font-bold text-amber-700 md:text-3xl">{pratoFeitoSummary.total}</span>
-              <span className="text-base font-medium text-slate-700">Prato Feito</span>
+              {pratoFeitoSummary.deliveryTotal > 0 && (
+                <span className="mx-auto mt-1 inline-flex max-w-full items-center justify-center rounded-lg bg-sky-600 px-2.5 py-1 text-[11px] font-black uppercase leading-tight tracking-wide text-white shadow-md ring-2 ring-sky-300/80">
+                  🚚 {pratoFeitoSummary.deliveryTotal} delivery
+                  {pratoFeitoSummary.deliveryTotal !== pratoFeitoSummary.total
+                    ? ` · ${pratoFeitoSummary.total - pratoFeitoSummary.deliveryTotal} salão`
+                    : ''}
+                </span>
+              )}
+              <span className="mt-1 text-base font-medium text-slate-700">Prato Feito</span>
               {pratoFeitoSummary.lines.length > 0 && (
                 <ul className="mt-2 space-y-1 border-t border-amber-200/90 pt-2 text-left text-xs font-medium text-amber-900/90">
                   {pratoFeitoSummary.lines.map((l) => (
@@ -158,35 +182,45 @@ export default function Cozinha() {
         )}
       </div>
       <div className="min-h-0 flex-1 space-y-2 overflow-auto pb-4">
-        {outrosPedidos.map((p) => (
+        {outrosPedidos.map((p) => {
+          const banner = pedidoOnlineBannerModel(p.comanda_tipo_online)
+          const obsShow = observacaoParaProducao(p.observations)
+          const addLab = textoResumoAddonsPedido(p)
+          return (
           <div
             key={p.id}
             className={cozinhaPedidoCardClass(p)}
           >
             <div className="min-w-0 flex-1">
-              {p.comanda_tipo_online === 'delivery' && (
-                <div className="mb-2 rounded-lg border-2 border-sky-600 bg-sky-200 px-3 py-2 text-center shadow-sm">
-                  <p className="text-sm font-black uppercase tracking-wide text-sky-950">🚚 Delivery</p>
-                  <p className="mt-0.5 text-xs font-semibold leading-snug text-sky-900">
-                    Embalar / preparar para envio — não é consumo na mesa
-                  </p>
+              {banner && (
+                <div className={banner.wrap}>
+                  <p className={banner.titleClass}>{banner.title}</p>
+                  <p className={banner.subtitleClass}>{banner.subtitle}</p>
                 </div>
               )}
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0">
-                <span className="font-medium text-slate-800">{p.quantity}x {p.item_name}</span>
-                {p.comanda_tipo_online !== 'delivery' && comandaOnlineLabel(p.comanda_tipo_online) && (
+                <span className="font-medium text-slate-800">
+                  {p.quantity}x {p.item_name}
+                  {addLab ? <span className="text-emerald-700">{addLab}</span> : null}
+                </span>
+                {isPedidoOnline(p) && (
+                  <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-violet-900 ring-1 ring-violet-300">
+                    Pedir online
+                  </span>
+                )}
+                {comandaOnlineLabel(p.comanda_tipo_online) && (
                   <span className="rounded-full bg-black/5 px-2 py-0.5 text-[11px] font-bold text-slate-700">
                     {comandaOnlineLabel(p.comanda_tipo_online)}
                   </span>
                 )}
                 <PedidoElapsed createdAt={p.created_at} className="text-xs" />
               </div>
-              {p.mesa && p.comanda_tipo_online === 'delivery' && (
-                <p className="mt-1 text-xs font-medium text-sky-900">{p.mesa}</p>
+              {p.mesa && isPedidoOnline(p) && (
+                <p className={`mt-1 text-xs font-medium ${p.comanda_tipo_online === 'delivery' ? 'text-sky-900' : 'text-teal-900'}`}>{p.mesa}</p>
               )}
               {p.waiting_grill && <span className="text-amber-600 text-sm">(aguard. churrasq.)</span>}
               {p.waiter_name && <span className="ml-2 text-slate-500 text-xs">— {p.waiter_name}</span>}
-              {p.observations && <p className="text-amber-800 text-sm font-medium">Descrição: {p.observations}</p>}
+              {obsShow && <p className="text-amber-800 text-sm font-medium">Obs.: {obsShow}</p>}
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {(p.quantity || 1) > 1 && (
@@ -219,20 +253,41 @@ export default function Cozinha() {
               )}
             </div>
           </div>
-        ))}
+          )
+        })}
         {pratoFeitoPedidos.length > 0 && (
           <div
             className={`flex items-center justify-between gap-2 rounded-xl border-2 p-3 ${
-              pratoFeitoTemDelivery
-                ? 'border-sky-500 bg-gradient-to-r from-sky-100 to-amber-50'
-                : 'border-amber-400 bg-amber-50'
+              pratoFeitoTemDelivery && pratoFeitoTemRetirada
+                ? 'border-indigo-500 bg-gradient-to-r from-sky-100 via-indigo-50 to-teal-50'
+                : pratoFeitoTemDelivery
+                  ? 'border-sky-500 bg-gradient-to-r from-sky-100 to-amber-50'
+                  : pratoFeitoTemRetirada
+                    ? 'border-teal-500 bg-gradient-to-r from-teal-100 to-amber-50'
+                    : 'border-amber-400 bg-amber-50'
             }`}
           >
             <div className="min-w-0 flex-1">
-              {pratoFeitoTemDelivery && (
-                <div className="mb-2 rounded-md border border-sky-600 bg-sky-200 px-2 py-1.5 text-center">
-                  <span className="text-xs font-black uppercase tracking-wide text-sky-950">
-                    🚚 Há Prato Feito para delivery — embalar para envio
+              {pratoFeitoTemOnline && (
+                <div
+                  className={`mb-2 rounded-md border px-2 py-1.5 text-center ${
+                    pratoFeitoTemDelivery && pratoFeitoTemRetirada
+                      ? 'border-indigo-600 bg-indigo-100'
+                      : pratoFeitoTemDelivery
+                        ? 'border-sky-600 bg-sky-200'
+                        : 'border-teal-600 bg-teal-200'
+                  }`}
+                >
+                  <span
+                    className={`text-xs font-black uppercase tracking-wide ${
+                      pratoFeitoTemDelivery && pratoFeitoTemRetirada ? 'text-indigo-950' : pratoFeitoTemDelivery ? 'text-sky-950' : 'text-teal-950'
+                    }`}
+                  >
+                    {pratoFeitoTemDelivery && pratoFeitoTemRetirada
+                      ? '🛒 Prato Feito — pedidos online (entrega + retirada)'
+                      : pratoFeitoTemDelivery
+                        ? '🚚 Prato Feito — pedido online entrega (delivery) — embalar'
+                        : '🛍 Prato Feito — pedido online retirada no balcão'}
                   </span>
                 </div>
               )}

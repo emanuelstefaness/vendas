@@ -3,6 +3,11 @@ import { Router } from 'express';
 export const reportsRouter = Router();
 const getDb = (req) => req.app.get('db');
 
+/** Data do dia operacional (virada 01:00): igual ao financeiro — date(closed_at, '-1 hour'). */
+function businessDayExpr(closedAtCol) {
+  return `date(${closedAtCol}, '-1 hour')`;
+}
+
 /** Comandas que geram linha de venda no relatório (pagas / fechadas no caixa) */
 function paidComandaWhere(alias) {
   const a = alias;
@@ -51,7 +56,7 @@ reportsRouter.get('/vendas/dia', (req, res) => {
         + ((COALESCE(c.service_tax_percent, 0) / 100.0) * (SELECT COALESCE(SUM(px4.quantity * px4.unit_price), 0) FROM pedidos px4 WHERE px4.comanda_id = c.id AND px4.status != 'cancelled'))
       ) as total
     FROM comandas c
-    WHERE date(c.closed_at) BETWEEN ? AND ? AND ${paid.trim()}
+    WHERE ${businessDayExpr('c.closed_at')} BETWEEN ? AND ? AND ${paid.trim()}
     ORDER BY c.closed_at
   `).all(from, to);
   res.json(rows);
@@ -63,14 +68,14 @@ reportsRouter.get('/vendas/mes', (req, res) => {
   const { from, to } = resolveRange(req);
   const paid = paidComandaWhere('c');
   const rows = db.prepare(`
-    SELECT date(c.closed_at) as dia, SUM(
+    SELECT ${businessDayExpr('c.closed_at')} as dia, SUM(
       IFNULL((SELECT SUM(p.quantity * p.unit_price) FROM pedidos p WHERE p.comanda_id = c.id AND p.status != 'cancelled'), 0)
       + (IFNULL(c.people_count, 0) * COALESCE(c.couvert_per_person, 5))
       + ((IFNULL(c.service_tax_percent, 0) / 100.0) * IFNULL((SELECT SUM(p.quantity * p.unit_price) FROM pedidos p WHERE p.comanda_id = c.id AND p.status != 'cancelled'), 0))
     ) as total
     FROM comandas c
-    WHERE date(c.closed_at) BETWEEN ? AND ? AND ${paid.trim()}
-    GROUP BY date(c.closed_at)
+    WHERE ${businessDayExpr('c.closed_at')} BETWEEN ? AND ? AND ${paid.trim()}
+    GROUP BY ${businessDayExpr('c.closed_at')}
     ORDER BY dia
   `).all(from, to);
   res.json(rows);
@@ -86,7 +91,7 @@ reportsRouter.get('/itens-mais-vendidos', (req, res) => {
     FROM pedidos p
     JOIN comandas cmd ON cmd.id = p.comanda_id
     JOIN items i ON i.id = p.item_id
-    WHERE date(cmd.closed_at) BETWEEN ? AND ?
+    WHERE ${businessDayExpr('cmd.closed_at')} BETWEEN ? AND ?
     AND ${paid.trim()}
     AND p.status != 'cancelled'
     GROUP BY p.item_id
@@ -106,7 +111,7 @@ reportsRouter.get('/por-categoria', (req, res) => {
     JOIN comandas cmd ON cmd.id = p.comanda_id
     JOIN items i ON i.id = p.item_id
     JOIN categories cat ON cat.id = i.category_id
-    WHERE date(cmd.closed_at) BETWEEN ? AND ?
+    WHERE ${businessDayExpr('cmd.closed_at')} BETWEEN ? AND ?
     AND ${paid.trim()}
     AND p.status != 'cancelled'
     GROUP BY i.category_id
@@ -120,7 +125,7 @@ reportsRouter.get('/faturamento', (req, res) => {
   const { from, to } = resolveRange(req);
   const comandas = db.prepare(`
     SELECT c.* FROM comandas c
-    WHERE date(c.closed_at) BETWEEN ? AND ? AND ${PAID.trim()}
+    WHERE ${businessDayExpr('c.closed_at')} BETWEEN ? AND ? AND ${PAID.trim()}
   `).all(from, to);
   let faturamento = 0;
   let taxaServico = 0;
@@ -145,7 +150,9 @@ reportsRouter.get('/faturamento', (req, res) => {
     comandasCount: n,
     totalPessoas,
     ticketMedio: n > 0 ? faturamento / n : 0,
-    ticketPorPessoa: totalPessoas > 0 ? faturamento / totalPessoas : 0
+    ticketPorPessoa: totalPessoas > 0 ? faturamento / totalPessoas : 0,
+    business_day_note:
+      'Dia operacional (virada 01:00): vendas são agrupadas pela data date(closed_at, -1 hour), alinhado ao financeiro.',
   });
 });
 
@@ -158,7 +165,7 @@ reportsRouter.get('/churrasqueira', (req, res) => {
     FROM pedidos p
     JOIN comandas cmd ON cmd.id = p.comanda_id
     JOIN items i ON i.id = p.item_id
-    WHERE date(cmd.closed_at) BETWEEN ? AND ?
+    WHERE ${businessDayExpr('cmd.closed_at')} BETWEEN ? AND ?
     AND ${paid.trim()}
     AND p.sector = 'grill' AND p.status != 'cancelled'
     GROUP BY p.item_id
@@ -182,7 +189,7 @@ reportsRouter.get('/por-garcom', (req, res) => {
       ) as total_faturamento
     FROM comandas c
     LEFT JOIN waiters w ON w.id = c.waiter_id
-    WHERE date(c.closed_at) BETWEEN ? AND ? AND ${paid.trim()}
+    WHERE ${businessDayExpr('c.closed_at')} BETWEEN ? AND ? AND ${paid.trim()}
     GROUP BY IFNULL(c.waiter_id, -1), COALESCE(w.name, '(Sem garçom)')
     ORDER BY total_faturamento DESC
   `).all(from, to);

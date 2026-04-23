@@ -7,6 +7,14 @@ import {
   subtituloStatusCliente,
   tituloAcompanhamento,
 } from '../utils/pedidoOnlineClienteStatus'
+import {
+  lancheComOpcionaisAdicionais,
+  itemAceitaCebolaCaramelizada,
+  itemAceitaHamburguerExtra,
+  unitPrecoComAddons,
+  PRECO_CEbola_CARAMELIZADA,
+  PRECO_HAMBURGUER_EXTRA
+} from '../utils/lancheAddons'
 
 const API = getApiBase()
 /** Taxa fixa de entrega (R$) para pedidos delivery (igual ao backend `public.js`). */
@@ -24,7 +32,8 @@ const IMAGE_FILE_BY_ITEM_NAME = {
   'prato feito do bosque': 'pratofeito.png',
   'queijo coalho': 'queijocoalho.png',
   'salada do bosque': 'salada do bosque.png',
-  'x-bosque': 'xbosque.png'
+  'x-bosque': 'xbosque.png',
+  'churraspao de coracao': 'churraspao-coracao.png'
 }
 
 /**
@@ -46,6 +55,8 @@ const PEDIR_MARKETING_DESC = {
     'Hambúrguer de kafta suculento, cheddar derretido, alface americana crocante e cebola caramelizada — combinação intensa, agridoce e simplesmente viciante.',
   churraspao:
     'Carne bovina suculenta, alface americana crocante, maionese da casa e uma camada generosa de queijo gratinado — muito queijo, muito sabor e zero moderação.',
+  'churraspao de coracao':
+    'Baguete crocante recheada com coração de galinha suculento, pasta de alho Santa Massa, alface americana fresca e uma generosa camada de queijo gratinado.',
   'gado com bacon':
     'Carne bovina suculenta com pedaços de bacon — defumado, intenso e impossível de resistir.',
   'gado com bacon e legumes':
@@ -216,6 +227,8 @@ export default function PedirOnline() {
   const [modalQty, setModalQty] = useState(1)
   const [modalObs, setModalObs] = useState('')
   const [modalPfEspetinhoId, setModalPfEspetinhoId] = useState('')
+  const [modalExtraCebola, setModalExtraCebola] = useState(false)
+  const [modalExtraBurger, setModalExtraBurger] = useState(false)
   const [comboModal, setComboModal] = useState(null)
   const [comboPfSelections, setComboPfSelections] = useState({})
   const [lastSuggestedAddedId, setLastSuggestedAddedId] = useState(null)
@@ -335,18 +348,34 @@ export default function PedirOnline() {
     }
   }, [orderedCategories, activeCatId])
 
+  const destaqueCoracaoItem = useMemo(() => {
+    const all = menu.items || []
+    return all.find((i) => {
+      const n = normalize(i.name)
+      return (n.includes('churraspao') || n.includes('churras pao')) && n.includes('coracao')
+    })
+  }, [menu.items])
+
   const highlightItems = useMemo(() => {
     const all = menu.items || []
     const espetoTop = all.find((i) => normalize(i.name).includes('gado') && normalize(i.name).includes('bacon'))
     const pratoFeito = all.find((i) => normalize(i.name).includes('prato') && normalize(i.name).includes('feito'))
-    const churraspao = all.find((i) => normalize(i.name).includes('churraspao') || normalize(i.name).includes('churras pao'))
+    const churraspao = all.find((i) => {
+      const n = normalize(i.name)
+      if (n.includes('coracao')) return false
+      return n.includes('churraspao') || n.includes('churras pao')
+    })
     return [espetoTop, pratoFeito, churraspao].filter(Boolean)
   }, [menu.items])
 
   const combos = useMemo(() => {
     const all = menu.items || []
     const pratoFeito = all.find((i) => normalize(i.name).includes('prato') && normalize(i.name).includes('feito'))
-    const churraspao = all.find((i) => normalize(i.name).includes('churraspao') || normalize(i.name).includes('churras pao'))
+    const churraspao = all.find((i) => {
+      const n = normalize(i.name)
+      if (n.includes('coracao')) return false
+      return n.includes('churraspao') || n.includes('churras pao')
+    })
     const coca = all.find((i) => normalize(i.name).includes('coca')) || all.find((i) => normalize(i.name).includes('refrigerante'))
 
     const makeCombo = (id, name, emoji, products, discountPercent) => {
@@ -397,7 +426,11 @@ export default function PedirOnline() {
     const coca = all.find((i) => normalize(i.name).includes('coca')) || all.find((i) => normalize(i.name).includes('refrigerante'))
     const batata = all.find((i) => normalize(i.name).includes('batata'))
     const molho = all.find((i) => normalize(i.name).includes('molho'))
-    const churraspao = all.find((i) => normalize(i.name).includes('churraspao') || normalize(i.name).includes('churras pao'))
+    const churraspao = all.find((i) => {
+      const n = normalize(i.name)
+      if (n.includes('coracao')) return false
+      return n.includes('churraspao') || n.includes('churras pao')
+    })
     const pratoFeito = all.find((i) => normalize(i.name).includes('prato') && normalize(i.name).includes('feito'))
 
     let picks = [coca, batata, molho]
@@ -407,21 +440,49 @@ export default function PedirOnline() {
     return picks.filter(Boolean).filter((i) => i.id !== modalProduct.id).slice(0, 3)
   }, [modalProduct, menu.items])
 
+  const modalProductCategorySlug = useMemo(() => {
+    if (!modalProduct?.category_id) return ''
+    return (menu.categories || []).find((c) => c.id === modalProduct.category_id)?.slug || ''
+  }, [modalProduct, menu.categories])
+
+  const modalUnitWithAddons = useMemo(() => {
+    if (!modalProduct) return 0
+    if (isPratoFeitoItem(modalProduct) || !lancheComOpcionaisAdicionais(modalProduct, modalProductCategorySlug)) {
+      return Number(modalProduct.price || 0)
+    }
+    return unitPrecoComAddons(Number(modalProduct.price || 0), modalProduct, {
+      extra_caramelized_onion: modalExtraCebola,
+      extra_hamburger: modalExtraBurger
+    })
+  }, [modalProduct, modalProductCategorySlug, modalExtraCebola, modalExtraBurger])
+
   useEffect(() => {
     if (!modalProduct) return
     setModalQty(1)
     setModalObs('')
     setModalPfEspetinhoId('')
+    setModalExtraCebola(false)
+    setModalExtraBurger(false)
   }, [modalProduct])
 
   /** `user_note` = só texto digitado pelo cliente (ex.: ponto da carne). Não guarda rótulos de combo na UI. */
-  const addItem = (item, quantity = 1, userNote = null, fixedPrice = null, pratoFeitoEspetinhoId = null) => {
+  const addItem = (item, quantity = 1, userNote = null, fixedPrice = null, pratoFeitoEspetinhoId = null, extras = null) => {
     const note = userNote != null && String(userNote).trim() !== '' ? String(userNote).trim() : null
+    const flags = extras && typeof extras === 'object' ? extras : {}
+    const unit =
+      fixedPrice != null && fixedPrice !== undefined
+        ? Number(fixedPrice)
+        : unitPrecoComAddons(Number(item.price || 0), item, {
+            extra_caramelized_onion: flags.extra_caramelized_onion,
+            extra_hamburger: flags.extra_hamburger
+          })
     setCart((prev) => {
       const idx = prev.findIndex((x) =>
         x.id === item.id &&
         (x.user_note || '') === (note || '') &&
-        Number(x.prato_feito_espetinho_id || 0) === Number(pratoFeitoEspetinhoId || 0)
+        Number(x.prato_feito_espetinho_id || 0) === Number(pratoFeitoEspetinhoId || 0) &&
+        !!x.extra_caramelized_onion === !!flags.extra_caramelized_onion &&
+        !!x.extra_hamburger === !!flags.extra_hamburger
       )
       if (idx >= 0) {
         const next = [...prev]
@@ -433,9 +494,11 @@ export default function PedirOnline() {
         id: item.id,
         name: item.name,
         quantity,
-        price: fixedPrice ?? Number(item.price),
+        price: unit,
         user_note: note,
-        prato_feito_espetinho_id: pfSelected > 0 ? pfSelected : null
+        prato_feito_espetinho_id: pfSelected > 0 ? pfSelected : null,
+        extra_caramelized_onion: !!flags.extra_caramelized_onion,
+        extra_hamburger: !!flags.extra_hamburger
       }]
     })
   }
@@ -450,7 +513,11 @@ export default function PedirOnline() {
     setError('')
     const obs = modalObs.trim()
     const composed = obs || null
-    addItem(modalProduct, modalQty, composed, null, isPratoFeito ? Number(modalPfEspetinhoId) : null)
+    const extras =
+      !isPratoFeito && lancheComOpcionaisAdicionais(modalProduct, modalProductCategorySlug)
+        ? { extra_caramelized_onion: modalExtraCebola, extra_hamburger: modalExtraBurger }
+        : null
+    addItem(modalProduct, modalQty, composed, null, isPratoFeito ? Number(modalPfEspetinhoId) : null, extras)
     setModalProduct(null)
     setModalQty(1)
     setModalObs('')
@@ -517,12 +584,14 @@ export default function PedirOnline() {
     setComboPfSelections({})
   }
 
-  const updateQty = (id, userNote, pratoFeitoEspetinhoId, delta) => {
+  const updateQty = (id, userNote, pratoFeitoEspetinhoId, extraOnion, extraBurger, delta) => {
     setCart((prev) => {
       const idx = prev.findIndex((x) =>
         x.id === id &&
         (x.user_note || '') === (userNote || '') &&
-        Number(x.prato_feito_espetinho_id || 0) === Number(pratoFeitoEspetinhoId || 0)
+        Number(x.prato_feito_espetinho_id || 0) === Number(pratoFeitoEspetinhoId || 0) &&
+        !!x.extra_caramelized_onion === !!extraOnion &&
+        !!x.extra_hamburger === !!extraBurger
       )
       if (idx < 0) return prev
       const next = [...prev]
@@ -572,7 +641,9 @@ export default function PedirOnline() {
             item_id: c.id,
             quantity: c.quantity,
             observations: c.user_note || null,
-            prato_feito_espetinho_id: c.prato_feito_espetinho_id || null
+            prato_feito_espetinho_id: c.prato_feito_espetinho_id || null,
+            extra_caramelized_onion: c.extra_caramelized_onion ? 1 : 0,
+            extra_hamburger: c.extra_hamburger ? 1 : 0
           })),
         }),
       })
@@ -750,6 +821,47 @@ export default function PedirOnline() {
             </div>
           )}
 
+          {destaqueCoracaoItem && (
+            <section className="mb-8 overflow-hidden rounded-2xl border-2 border-[hsl(var(--menu-primary))] bg-gradient-to-br from-orange-50 via-white to-amber-50/80 shadow-xl ring-1 ring-orange-200/60">
+              <div className="grid gap-0 md:grid-cols-2 md:items-stretch">
+                <div className="relative aspect-[4/3] min-h-[200px] bg-slate-200 md:min-h-[260px]">
+                  {(() => {
+                    const { image, imageFallback } = resolvePedirItemImages(destaqueCoracaoItem.name, apiBase)
+                    return image ? (
+                      <img
+                        src={image}
+                        alt={destaqueCoracaoItem.name}
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          if (imageFallback && e.currentTarget.src !== imageFallback) {
+                            e.currentTarget.src = imageFallback
+                          }
+                        }}
+                      />
+                    ) : (
+                      <div className="flex h-full min-h-[200px] items-center justify-center bg-slate-100 text-slate-500">Foto em breve</div>
+                    )
+                  })()}
+                </div>
+                <div className="flex flex-col justify-center p-5 md:p-8">
+                  <span className="text-xs font-black uppercase tracking-[0.2em] text-red-600">Destaque</span>
+                  <h2 className="mt-1 font-display text-2xl font-black leading-tight text-[hsl(var(--menu-fg))] md:text-3xl">
+                    {destaqueCoracaoItem.name}
+                  </h2>
+                  <p className="mt-3 text-sm leading-relaxed text-slate-700 md:text-base">{textoDescricaoItemPedir(destaqueCoracaoItem)}</p>
+                  <p className="mt-4 text-2xl font-black text-[hsl(var(--menu-primary))]">{formatPrice(destaqueCoracaoItem.price)}</p>
+                  <button
+                    type="button"
+                    onClick={() => setModalProduct(destaqueCoracaoItem)}
+                    className="mt-5 rounded-xl bg-black py-3.5 text-base font-bold text-white shadow-lg transition hover:opacity-90 active:scale-[0.99]"
+                  >
+                    Pedir agora
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
+
           <section className="mb-8">
             <div className="mb-3 flex items-center gap-2">
               <span>⭐</span>
@@ -900,12 +1012,14 @@ export default function PedirOnline() {
             setModalQty(1)
             setModalObs('')
             setModalPfEspetinhoId('')
+            setModalExtraCebola(false)
+            setModalExtraBurger(false)
           }}
         >
           <div className="w-full max-w-md rounded-t-3xl bg-white p-5 shadow-float sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-2xl font-semibold">{modalProduct.name}</h3>
             <p className="mt-1 text-sm leading-relaxed text-slate-600">{textoDescricaoItemPedir(modalProduct)}</p>
-            <p className="mt-2 text-2xl font-semibold text-slate-900">{formatPrice(modalProduct.price)}</p>
+            <p className="mt-2 text-2xl font-semibold text-slate-900">{formatPrice(modalUnitWithAddons)}</p>
 
             {isPratoFeitoItem(modalProduct) && (
               <div className="mt-4">
@@ -920,6 +1034,23 @@ export default function PedirOnline() {
                     <option key={esp.id} value={esp.id}>{esp.name}</option>
                   ))}
                 </select>
+              </div>
+            )}
+
+            {!isPratoFeitoItem(modalProduct) && lancheComOpcionaisAdicionais(modalProduct, modalProductCategorySlug) && (
+              <div className="mt-4 space-y-2 rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+                {itemAceitaCebolaCaramelizada(modalProduct) && (
+                  <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-800">
+                    <input type="checkbox" className="mt-0.5" checked={modalExtraCebola} onChange={(e) => setModalExtraCebola(e.target.checked)} />
+                    <span>Cebola caramelizada (+ {formatPrice(PRECO_CEbola_CARAMELIZADA)})</span>
+                  </label>
+                )}
+                {itemAceitaHamburguerExtra(modalProduct) && (
+                  <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-800">
+                    <input type="checkbox" className="mt-0.5" checked={modalExtraBurger} onChange={(e) => setModalExtraBurger(e.target.checked)} />
+                    <span>Hambúrguer extra (+ {formatPrice(PRECO_HAMBURGUER_EXTRA)})</span>
+                  </label>
+                )}
               </div>
             )}
 
@@ -950,7 +1081,7 @@ export default function PedirOnline() {
                 <button type="button" className="h-10 w-10 font-bold" onClick={() => setModalQty((q) => q + 1)}>+</button>
               </div>
               <button type="button" onClick={addFromModal} className="flex-1 rounded-xl bg-black py-3 font-semibold text-white">
-                Adicionar - {formatPrice(modalProduct.price * modalQty)}
+                Adicionar - {formatPrice(modalUnitWithAddons * modalQty)}
               </button>
             </div>
           </div>
@@ -1019,16 +1150,42 @@ export default function PedirOnline() {
               {cart.length > 0 && (
                 <div className="space-y-2">
                   {cart.map((item, i) => (
-                    <div key={`${item.id}-${item.user_note || ''}-${i}`} className="rounded-xl border p-3">
+                    <div
+                      key={`${item.id}-${item.user_note || ''}-${item.prato_feito_espetinho_id || ''}-${item.extra_caramelized_onion ? '1' : '0'}-${item.extra_hamburger ? '1' : '0'}-${i}`}
+                      className="rounded-xl border p-3"
+                    >
                       <div className="flex items-center justify-between gap-2">
                         <p className="font-semibold">{item.name}</p>
                         <p className="font-bold">{formatPrice(item.price * item.quantity)}</p>
                       </div>
                       {item.user_note && <p className="mt-1 text-xs text-slate-500">{item.user_note}</p>}
+                      {(item.extra_caramelized_onion || item.extra_hamburger) && (
+                        <p className="mt-1 text-xs font-medium text-emerald-800">
+                          {item.extra_caramelized_onion ? `+ cebola caramelizada (${formatPrice(PRECO_CEbola_CARAMELIZADA)})` : ''}
+                          {item.extra_caramelized_onion && item.extra_hamburger ? ' · ' : ''}
+                          {item.extra_hamburger ? `+ hambúrguer extra (${formatPrice(PRECO_HAMBURGUER_EXTRA)})` : ''}
+                        </p>
+                      )}
                       <div className="mt-2 flex items-center gap-2">
-                        <button type="button" className="h-9 w-9 rounded-full border font-bold" onClick={() => updateQty(item.id, item.user_note, item.prato_feito_espetinho_id, -1)}>-</button>
+                        <button
+                          type="button"
+                          className="h-9 w-9 rounded-full border font-bold"
+                          onClick={() =>
+                            updateQty(item.id, item.user_note, item.prato_feito_espetinho_id, item.extra_caramelized_onion, item.extra_hamburger, -1)
+                          }
+                        >
+                          -
+                        </button>
                         <span className="w-8 text-center font-bold">{item.quantity}</span>
-                        <button type="button" className="h-9 w-9 rounded-full border font-bold" onClick={() => updateQty(item.id, item.user_note, item.prato_feito_espetinho_id, 1)}>+</button>
+                        <button
+                          type="button"
+                          className="h-9 w-9 rounded-full border font-bold"
+                          onClick={() =>
+                            updateQty(item.id, item.user_note, item.prato_feito_espetinho_id, item.extra_caramelized_onion, item.extra_hamburger, 1)
+                          }
+                        >
+                          +
+                        </button>
                       </div>
                     </div>
                   ))}

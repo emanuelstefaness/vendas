@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { broadcastAll } from '../socket.js';
 import { getPedidoSector } from '../itemSector.js';
+import { resolveLancheAddonsFromBody } from '../lancheAddons.js';
 
 export const publicRouter = Router();
 const getDb = (req) => req.app.get('db');
@@ -96,13 +97,24 @@ publicRouter.post('/orders', (req, res) => {
       }
       pratoFeitoEspetinhoId = selectedEsp;
     }
-    const unitPrice = item.price;
+    const addons = resolveLancheAddonsFromBody(item, row);
+    const unitPrice = item.price + addons.unit_addon;
+    let observationsOut = row.observations ? String(row.observations).trim() : null;
+    const obsAdd = [];
+    if (addons.extra_caramelized_onion) obsAdd.push('cebola caramelizada (+R$5,00)');
+    if (addons.extra_hamburger) obsAdd.push('hambúrguer extra (+R$12,00)');
+    if (obsAdd.length) {
+      const s = obsAdd.join(' · ');
+      observationsOut = observationsOut ? `${observationsOut} · ${s}` : s;
+    }
     validItems.push({
       item_id: itemId,
       quantity: qty,
       unit_price: unitPrice,
-      observations: row.observations || null,
-      prato_feito_espetinho_id: pratoFeitoEspetinhoId
+      observations: observationsOut,
+      prato_feito_espetinho_id: pratoFeitoEspetinhoId,
+      extra_caramelized_onion: addons.extra_caramelized_onion,
+      extra_hamburger: addons.extra_hamburger
     });
     valorTotal += qty * unitPrice;
   }
@@ -163,8 +175,8 @@ publicRouter.post('/orders', (req, res) => {
 
     const insOrderItem = db.prepare('INSERT INTO order_items (order_id, item_id, quantity, unit_price, observations) VALUES (?, ?, ?, ?, ?)');
     const insPedido = db.prepare(`
-      INSERT INTO pedidos (comanda_id, item_id, quantity, unit_price, observations, prato_feito_espetinho_id, sector)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO pedidos (comanda_id, item_id, quantity, unit_price, observations, prato_feito_espetinho_id, extra_caramelized_onion, extra_hamburger, sector)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const insStatus = db.prepare('INSERT OR REPLACE INTO pedido_sector_status (pedido_id, sector, status) VALUES (?, ?, ?)');
 
@@ -184,6 +196,8 @@ publicRouter.post('/orders', (req, res) => {
         row.unit_price,
         row.observations,
         row.prato_feito_espetinho_id || null,
+        row.extra_caramelized_onion ?? 0,
+        row.extra_hamburger ?? 0,
         sector
       );
       const pedidoId = r.lastInsertRowid;

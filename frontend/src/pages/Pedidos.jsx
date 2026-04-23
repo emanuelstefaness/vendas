@@ -1,6 +1,15 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getCategories, getItems, getEspetinhos, createPedido, getPedidosByComanda, deletePedido, updatePedido, getComanda, updateComanda } from '../api'
+import {
+  lancheComOpcionaisAdicionais,
+  itemAceitaCebolaCaramelizada,
+  itemAceitaHamburguerExtra,
+  unitPrecoComAddons,
+  textoResumoAddonsPedido,
+  PRECO_CEbola_CARAMELIZADA,
+  PRECO_HAMBURGUER_EXTRA
+} from '../utils/lancheAddons'
 
 const MEAT_POINTS = ['mal passado', 'ao ponto', 'bem passado']
 const CAIPIRINHA_BASES = ['Cachaça', 'Vodka']
@@ -75,6 +84,18 @@ export default function Pedidos() {
       return
     }
     if (needMeat) {
+      if (lancheComOpcionaisAdicionais(item, currentCategory?.slug)) {
+        setModal({
+          item,
+          quantity: qty,
+          step: 'meat',
+          meat_point: 'ao ponto',
+          extra_caramelized_onion: false,
+          extra_hamburger: false,
+          observations: ''
+        })
+        return
+      }
       setModal({ item, quantity: qty, step: 'meat', observations: '' })
       return
     }
@@ -98,7 +119,7 @@ export default function Pedidos() {
   }
 
   const addToDraft = (opts, replaceIndex = null) => {
-    const { item, quantity, meat_point, caipirinha_base, caipirinha_picole, dose_accompaniment, prato_feito_espetinho_id, observations } = opts
+    const { item, quantity, meat_point, caipirinha_base, caipirinha_picole, dose_accompaniment, prato_feito_espetinho_id, observations, extra_caramelized_onion, extra_hamburger } = opts
     const prato_feito_espetinho_name = prato_feito_espetinho_id != null
       ? (espetinhos.find((e) => e.id === prato_feito_espetinho_id)?.name || '')
       : undefined
@@ -113,6 +134,8 @@ export default function Pedidos() {
       prato_feito_espetinho_id: prato_feito_espetinho_id || undefined,
       prato_feito_espetinho_name,
       observations: (observations && String(observations).trim()) || undefined,
+      extra_caramelized_onion: !!extra_caramelized_onion,
+      extra_hamburger: !!extra_hamburger,
       tipo: getTipo(opts)
     }
     setModal(null)
@@ -130,7 +153,7 @@ export default function Pedidos() {
   }
 
   const sendPedido = async (opts) => {
-    const { item, quantity, meat_point, caipirinha_base, caipirinha_picole, dose_accompaniment, prato_feito_espetinho_id, observations } = opts
+    const { item, quantity, meat_point, caipirinha_base, caipirinha_picole, dose_accompaniment, prato_feito_espetinho_id, observations, extra_caramelized_onion, extra_hamburger } = opts
     const cid = Number(comandaId)
     if (!Number.isFinite(cid) || cid < 1) throw new Error('Comanda inválida')
     const iid = Number(item?.id)
@@ -145,7 +168,9 @@ export default function Pedidos() {
       caipirinha_picole: caipirinha_picole ? 1 : 0,
       dose_accompaniment: dose_accompaniment || undefined,
       prato_feito_espetinho_id: prato_feito_espetinho_id != null ? Number(prato_feito_espetinho_id) || undefined : undefined,
-      observations: observations && String(observations).trim() ? String(observations).trim() : undefined
+      observations: observations && String(observations).trim() ? String(observations).trim() : undefined,
+      extra_caramelized_onion: extra_caramelized_onion ? 1 : 0,
+      extra_hamburger: extra_hamburger ? 1 : 0
     })
   }
 
@@ -162,7 +187,9 @@ export default function Pedidos() {
         caipirinha_picole: line.caipirinha_picole,
         dose_accompaniment: line.dose_accompaniment,
         prato_feito_espetinho_id: line.prato_feito_espetinho_id,
-        observations: line.observations
+        observations: line.observations,
+        extra_caramelized_onion: line.extra_caramelized_onion,
+        extra_hamburger: line.extra_hamburger
       }))
       await Promise.all(payloads.map((p) => sendPedido(p)))
       setRascunho([])
@@ -186,7 +213,16 @@ export default function Pedidos() {
   }
 
   const totalPedidos = pedidos.reduce((s, p) => s + p.quantity * p.unit_price, 0)
-  const totalRascunho = rascunho.reduce((s, r) => s + r.quantity * Number(r.item?.price || 0), 0)
+  const totalRascunho = rascunho.reduce(
+    (s, r) =>
+      s +
+      r.quantity *
+        unitPrecoComAddons(r.item?.price, r.item, {
+          extra_caramelized_onion: r.extra_caramelized_onion,
+          extra_hamburger: r.extra_hamburger
+        }),
+    0
+  )
   const totalItens = pedidos.reduce((s, p) => s + (p.quantity || 1), 0) + rascunho.reduce((s, r) => s + (r.quantity || 1), 0)
 
   /** Coluna esquerda: bebidas/bar; coluna direita: comidas. */
@@ -209,7 +245,9 @@ export default function Pedidos() {
         line.caipirinha_base || '',
         line.caipirinha_picole ? '1' : '0',
         line.dose_accompaniment || '',
-        line.observations || ''
+        line.observations || '',
+        line.extra_caramelized_onion ? '1' : '0',
+        line.extra_hamburger ? '1' : '0'
       ].join('\x1e')
       if (!map.has(key)) {
         map.set(key, {
@@ -251,6 +289,8 @@ export default function Pedidos() {
 
     if (line.caipirinha_base) parts.push(line.caipirinha_base + (line.caipirinha_picole ? ' c/ picolé' : ''))
     if (line.dose_accompaniment) parts.push(line.dose_accompaniment)
+    if (line.extra_caramelized_onion) parts.push(`cebola caramelizada (+R$ ${PRECO_CEbola_CARAMELIZADA.toFixed(2).replace('.', ',')})`)
+    if (line.extra_hamburger) parts.push(`hambúrguer extra (+R$ ${PRECO_HAMBURGUER_EXTRA.toFixed(2).replace('.', ',')})`)
     if (line.observations) parts.push(line.observations)
     return parts.join(' · ')
   }
@@ -291,7 +331,18 @@ export default function Pedidos() {
     const line = rascunho[index]
     const item = line.item
     setEditRascunhoIndex(index)
-    const base = { item, quantity: line.quantity, meat_point: line.meat_point, caipirinha_base: line.caipirinha_base, caipirinha_picole: line.caipirinha_picole, dose_accompaniment: line.dose_accompaniment, prato_feito_espetinho_id: line.prato_feito_espetinho_id, observations: line.observations || '' }
+    const base = {
+      item,
+      quantity: line.quantity,
+      meat_point: line.meat_point,
+      caipirinha_base: line.caipirinha_base,
+      caipirinha_picole: line.caipirinha_picole,
+      dose_accompaniment: line.dose_accompaniment,
+      prato_feito_espetinho_id: line.prato_feito_espetinho_id,
+      observations: line.observations || '',
+      extra_caramelized_onion: !!line.extra_caramelized_onion,
+      extra_hamburger: !!line.extra_hamburger
+    }
     if (line.tipo === 'prato_feito') {
       setModal({ ...base, step: 'prato_feito' })
     } else if (line.tipo === 'meat') {
@@ -418,10 +469,15 @@ export default function Pedidos() {
             </div>
           ) : (
             <ul className="space-y-2">
-              {pedidos.map((p) => (
+              {pedidos.map((p) => {
+                const addLab = textoResumoAddonsPedido(p)
+                return (
                 <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
                   <div className="min-w-0 flex-1">
-                    <span className="font-medium text-slate-800">{p.quantity}x {p.item_name}</span>
+                    <span className="font-medium text-slate-800">
+                      {p.quantity}x {p.item_name}
+                      {addLab ? <span className="font-semibold text-emerald-700">{addLab}</span> : null}
+                    </span>
                     {(p.meat_point || p.caipirinha_base || p.dose_accompaniment || p.prato_feito_espetinho_id) && (
                       <span className="ml-2 text-xs text-amber-700">
                         {[p.meat_point, p.caipirinha_base, p.dose_accompaniment].filter(Boolean).join(' · ')}
@@ -439,7 +495,8 @@ export default function Pedidos() {
                     </button>
                   </div>
                 </li>
-              ))}
+                )
+              })}
             </ul>
           )}
         </div>
@@ -654,18 +711,77 @@ export default function Pedidos() {
             {modal.step === 'meat' && (
               <>
                 <p className="mb-3 text-sm text-slate-500">Ponto da carne</p>
-                <div className="space-y-2">
-                  {MEAT_POINTS.map((pt) => (
+                {lancheComOpcionaisAdicionais(modal.item, currentCategory?.slug) ? (
+                  <>
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {MEAT_POINTS.map((pt) => (
+                        <button
+                          key={pt}
+                          type="button"
+                          className={`rounded-lg px-3 py-2 text-sm font-medium ${
+                            modal.meat_point === pt ? 'bg-amber-500 text-white' : 'border border-slate-200 bg-slate-50 text-slate-800'
+                          }`}
+                          onClick={() => setModal((m) => (m ? { ...m, meat_point: pt } : null))}
+                        >
+                          {pt}
+                        </button>
+                      ))}
+                    </div>
+                    {itemAceitaCebolaCaramelizada(modal.item) && (
+                      <label className="mb-2 flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm text-slate-800">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5"
+                          checked={!!modal.extra_caramelized_onion}
+                          onChange={(e) => setModal((m) => (m ? { ...m, extra_caramelized_onion: e.target.checked } : null))}
+                        />
+                        <span>Cebola caramelizada (+ R$ {PRECO_CEbola_CARAMELIZADA.toFixed(2).replace('.', ',')})</span>
+                      </label>
+                    )}
+                    {itemAceitaHamburguerExtra(modal.item) && (
+                      <label className="mb-3 flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm text-slate-800">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5"
+                          checked={!!modal.extra_hamburger}
+                          onChange={(e) => setModal((m) => (m ? { ...m, extra_hamburger: e.target.checked } : null))}
+                        />
+                        <span>Hambúrguer extra (+ R$ {PRECO_HAMBURGUER_EXTRA.toFixed(2).replace('.', ',')})</span>
+                      </label>
+                    )}
                     <button
-                      key={pt}
                       type="button"
-                      className="btn btn-primary w-full"
-                      onClick={() => addToDraft({ ...modal, meat_point: pt }, editRascunhoIndex)}
+                      className="btn btn-success w-full"
+                      disabled={!modal.meat_point}
+                      onClick={() =>
+                        addToDraft(
+                          {
+                            ...modal,
+                            meat_point: modal.meat_point,
+                            extra_caramelized_onion: modal.extra_caramelized_onion,
+                            extra_hamburger: modal.extra_hamburger
+                          },
+                          editRascunhoIndex
+                        )
+                      }
                     >
-                      {pt}
+                      Adicionar ao pedido
                     </button>
-                  ))}
-                </div>
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    {MEAT_POINTS.map((pt) => (
+                      <button
+                        key={pt}
+                        type="button"
+                        className="btn btn-primary w-full"
+                        onClick={() => addToDraft({ ...modal, meat_point: pt }, editRascunhoIndex)}
+                      >
+                        {pt}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </>
             )}
 

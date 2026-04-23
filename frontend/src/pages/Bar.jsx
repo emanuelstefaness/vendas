@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { getPedidosBar, setPedidoSectorStatus } from '../api'
 import { useSocket } from '../socket'
 import PedidoElapsed, { earliestCreatedAt } from '../components/PedidoElapsed'
-import { barComandaColumnClass, comandaOnlineLabel } from '../utils/comandaOnlineVisual'
+import { barComandaColumnClass, comandaOnlineLabel, isTipoPedidoOnline, pedidoOnlineBannerModel } from '../utils/comandaOnlineVisual'
+import { observacaoParaProducao } from '../utils/productionObservations'
 
 /** Ordem dos cards = ordem de lançamento na fila (ver Churrasqueira.jsx). */
 function groupByComanda(list) {
@@ -67,18 +68,32 @@ export default function Bar() {
         <p className="text-sm text-slate-500">Caipirinhas, doses e drinks</p>
       </div>
       <div className="flex min-h-0 flex-1 flex-row gap-3 overflow-x-auto overflow-y-hidden pb-2">
-        {cards.map((card) => (
+        {cards.map((card) => {
+          const tipoOn = card.items[0]?.comanda_tipo_online
+          const barBanner = pedidoOnlineBannerModel(tipoOn)
+          return (
           <div
             key={card.comanda_id}
-            className={barComandaColumnClass(card.items[0]?.comanda_tipo_online)}
+            className={barComandaColumnClass(tipoOn)}
           >
+            {barBanner && (
+              <div className={barBanner.wrap}>
+                <p className={barBanner.titleClass}>{barBanner.title}</p>
+                <p className={barBanner.subtitleClass}>{barBanner.subtitle}</p>
+              </div>
+            )}
             <div className="mb-2 flex flex-wrap items-center justify-between gap-1">
               <div>
                 <span className="font-bold text-sm text-slate-800">
                   Comanda {card.comanda_id} — Mesa {card.mesa}
-                  {comandaOnlineLabel(card.items[0]?.comanda_tipo_online) && (
+                  {isTipoPedidoOnline(tipoOn) && (
+                    <span className="ml-2 inline-block rounded-full bg-violet-200/90 px-2 py-0.5 text-[9px] font-black uppercase text-violet-900">
+                      Pedir online
+                    </span>
+                  )}
+                  {comandaOnlineLabel(tipoOn) && (
                     <span className="ml-2 inline-block rounded-full bg-slate-200/90 px-2 py-0.5 text-[10px] font-bold text-slate-800">
-                      {comandaOnlineLabel(card.items[0]?.comanda_tipo_online)}
+                      {comandaOnlineLabel(tipoOn)}
                     </span>
                   )}
                 </span>
@@ -96,19 +111,21 @@ export default function Bar() {
               </button>
             </div>
             <ul className="min-h-0 flex-1 space-y-2 overflow-auto">
-              {card.items.map((p) => (
+              {card.items.map((p) => {
+                const obsLinha = observacaoParaProducao(p.observations)
+                return (
                 <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-100 px-2 py-1.5 text-sm text-slate-800">
                   <span className="flex-1">
                     <span className="flex flex-wrap items-baseline gap-x-2">
                       <span>{p.quantity}x {p.item_name}</span>
                       <PedidoElapsed createdAt={p.created_at} className="text-xs" />
                     </span>
-                    {(p.caipirinha_base || p.caipirinha_picole || p.dose_accompaniment || p.observations) && (
+                    {(p.caipirinha_base || p.caipirinha_picole || p.dose_accompaniment || obsLinha) && (
                       <span className="block text-xs text-slate-500">
                         {p.caipirinha_base && `Base: ${p.caipirinha_base}`}
                         {p.caipirinha_picole && ' • Picolé'}
                         {p.dose_accompaniment && ` • ${p.dose_accompaniment}`}
-                        {p.observations && `${(p.caipirinha_base || p.caipirinha_picole || p.dose_accompaniment) ? ' • ' : ''}${p.observations}`}
+                        {obsLinha && `${(p.caipirinha_base || p.caipirinha_picole || p.dose_accompaniment) ? ' • ' : ''}${obsLinha}`}
                       </span>
                     )}
                   </span>
@@ -120,10 +137,12 @@ export default function Bar() {
                     Pronto
                   </button>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           </div>
-        ))}
+          );
+        })}
       </div>
       {cards.length === 0 && (
         <p className="py-8 text-center text-slate-500">Nenhum pedido no momento.</p>
