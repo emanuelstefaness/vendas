@@ -640,6 +640,7 @@ export default function PedirOnline() {
           items: cart.map((c) => ({
             item_id: c.id,
             quantity: c.quantity,
+            unit_price: Number(c.price),
             observations: c.user_note || null,
             prato_feito_espetinho_id: c.prato_feito_espetinho_id || null,
             extra_caramelized_onion: c.extra_caramelized_onion ? 1 : 0,
