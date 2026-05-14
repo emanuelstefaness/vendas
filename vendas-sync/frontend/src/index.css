@@ -1,0 +1,67 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Nunito:wght@600;700;800;900&display=swap');
+@import "tailwindcss";
+
+:root {
+  --comanda-closed: #64748b;
+  --comanda-open: #2563eb;
+  --comanda-ordering: #d97706;
+  --comanda-paying: #dc2626;
+  --comanda-closed-green: #16a34a;
+  --menu-bg: 30 25% 97%;
+  --menu-fg: 20 15% 15%;
+  --menu-primary: 8 85% 56%;
+  --menu-secondary: 30 60% 95%;
+  --menu-accent: 36 100% 50%;
+  --menu-muted: 30 20% 93%;
+  --badge-popular: 0 85% 55%;
+  --badge-favorite: 45 100% 50%;
+  --combo-bg: 30 50% 96%;
+  --savings: 145 60% 40%;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: hsl(var(--menu-bg));
+  color: hsl(var(--menu-fg));
+}
+
+.font-display { font-family: 'Nunito', 'Inter', system-ui, sans-serif; }
+.menu-bg { background: hsl(var(--menu-bg)); }
+.menu-primary { background: hsl(var(--menu-primary)); }
+.menu-secondary { background: hsl(var(--menu-secondary)); }
+.menu-accent { color: hsl(var(--menu-accent)); }
+.menu-muted { background: hsl(var(--menu-muted)); }
+.text-savings { color: hsl(var(--savings)); }
+.bg-combo { background: hsl(var(--combo-bg)); }
+
+.shadow-card { box-shadow: 0 4px 14px rgba(27, 20, 12, 0.08); }
+.shadow-highlight { box-shadow: 0 0 0 2px rgba(238, 79, 48, 0.25), 0 16px 30px rgba(238, 79, 48, 0.22); }
+.shadow-float { box-shadow: 0 12px 30px rgba(34, 26, 20, 0.22); }
+
+@keyframes pulse-glow {
+  0% { box-shadow: 0 0 0 0 rgba(238, 79, 48, 0.35); }
+  70% { box-shadow: 0 0 0 14px rgba(238, 79, 48, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(238, 79, 48, 0); }
+}
+.animate-pulse-glow { animation: pulse-glow 2s infinite; }
+
+.btn {
+  @apply px-4 py-2 rounded-xl font-semibold transition active:scale-[0.98];
+}
+.btn-primary { @apply bg-amber-500 text-slate-900 hover:bg-amber-400; }
+.btn-secondary { @apply bg-slate-200 text-slate-800 hover:bg-slate-300; }
+.btn-success { @apply bg-emerald-600 text-white hover:bg-emerald-500; }
+.btn-danger { @apply bg-red-600 text-white hover:bg-red-500; }
+.btn-info { @apply bg-indigo-500 text-white hover:bg-indigo-600; }
+
+.card-status-closed { background: linear-gradient(145deg, #94a3b8 0%, #64748b 100%); color: #fff; }
+.card-status-open { background: linear-gradient(145deg, #1d4ed8 0%, #2563eb 100%); color: #fff; }
+.card-status-ordering { background: linear-gradient(145deg, #b45309 0%, #d97706 100%); color: #fff; }
+.card-status-paying { background: linear-gradient(145deg, #b91c1c 0%, #dc2626 100%); color: #fff; }
+.card-status-closed-green { background: linear-gradient(145deg, #15803d 0%, #22c55e 100%); color: #fff; }
+
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
