@@ -8,6 +8,31 @@ import { isPedidosOnlineAtivo, statusPedidosOnline, MENSAGEM_ONLINE_FECHADO } fr
 export const publicRouter = Router();
 const getDb = (req) => req.app.get('db');
 
+function normalizeTelefone(v) {
+  return String(v || '').replace(/\D/g, '');
+}
+
+function telefoneConfere(stored, query) {
+  const a = normalizeTelefone(stored);
+  const b = normalizeTelefone(query);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  if (b.length >= 8 && a.endsWith(b.slice(-8))) return true;
+  if (b.length >= 4 && a.endsWith(b.slice(-4))) return true;
+  return false;
+}
+
+function orderComItens(db, order) {
+  const items = db.prepare(`
+    SELECT oi.*, i.name as item_name
+    FROM order_items oi
+    JOIN items i ON i.id = oi.item_id
+    WHERE oi.order_id = ?
+    ORDER BY oi.id
+  `).all(order.id);
+  return { ...order, items };
+}
+
 // Diagnóstico: confirma que a API pública está no ar
 publicRouter.get('/', (req, res) => {
   res.json({ ok: true, message: 'API pública pedidos online' });
@@ -269,25 +294,38 @@ publicRouter.post('/orders', (req, res) => {
   }
 });
 
+// Último pedido do cliente (acompanhamento só com telefone)
+publicRouter.get('/orders/ultimo', (req, res) => {
+  const db = getDb(req);
+  const telReq = normalizeTelefone(req.query.telefone);
+  if (!telReq || telReq.length < 8) {
+    return res.status(400).json({ error: 'Informe seu telefone com DDD' });
+  }
+  const recentes = db.prepare(`
+    SELECT * FROM orders ORDER BY id DESC LIMIT 300
+  `).all();
+  const order = recentes.find((o) => telefoneConfere(o.cliente_telefone, telReq));
+  if (!order) {
+    return res.status(404).json({ error: 'Nenhum pedido encontrado para este telefone' });
+  }
+  res.json(orderComItens(db, order));
+});
+
 // Status do pedido (cliente consulta acompanhamento)
 publicRouter.get('/orders/:id', (req, res) => {
   const db = getDb(req);
   const id = Number(req.params.id);
+  if (!Number.isFinite(id) || id < 1) {
+    return res.status(400).json({ error: 'Pedido inválido' });
+  }
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
   if (!order) return res.status(404).json({ error: 'Pedido não encontrado' });
 
-  const telReq = String(req.query.telefone || '').replace(/\D/g, '');
-  const telOrder = String(order.cliente_telefone || '').replace(/\D/g, '');
-  if (telReq && telOrder) {
-    const ok = telReq === telOrder || telOrder.endsWith(telReq.slice(-8)) || telOrder.endsWith(telReq.slice(-4));
-    if (!ok) return res.status(403).json({ error: 'Telefone não confere com este pedido' });
+  const telReq = normalizeTelefone(req.query.telefone);
+  const telOrder = normalizeTelefone(order.cliente_telefone);
+  if (telReq && telOrder && !telefoneConfere(telOrder, telReq)) {
+    return res.status(403).json({ error: 'Telefone não confere com este pedido' });
   }
 
-  const items = db.prepare(`
-    SELECT oi.*, i.name as item_name
-    FROM order_items oi
-    JOIN items i ON i.id = oi.item_id
-    WHERE oi.order_id = ?
-  `).all(order.id);
-  res.json({ ...order, items });
+  res.json(orderComItens(db, order));
 });

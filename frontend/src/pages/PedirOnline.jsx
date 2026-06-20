@@ -735,12 +735,12 @@ export default function PedirOnline() {
 
       {step === 'menu' && (
         <main className="mx-auto mt-5 w-full max-w-5xl px-4">
-          {pedidoSalvoLocal?.id && (
+          {pedidoSalvoLocal?.telefone && (
             <Link
-              to={`/acompanhar/${pedidoSalvoLocal.id}`}
+              to="/acompanhar"
               className="mb-4 flex items-center justify-between rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950 hover:bg-amber-100"
             >
-              <span>📦 Continuar acompanhando pedido #{pedidoSalvoLocal.id}</span>
+              <span>📦 Acompanhar meu último pedido</span>
               <span className="text-amber-700">Ver →</span>
             </Link>
           )}

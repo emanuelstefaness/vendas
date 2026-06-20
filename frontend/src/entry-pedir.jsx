@@ -13,7 +13,6 @@ createRoot(document.getElementById('root')).render(
         <Route path="/" element={<PedirOnline />} />
         <Route path="/pedir" element={<PedirOnline />} />
         <Route path="/acompanhar" element={<PedirOnlineAcompanhar />} />
-        <Route path="/acompanhar/:orderId" element={<PedirOnlineAcompanhar />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,

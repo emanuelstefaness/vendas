@@ -77,7 +77,6 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/pedir" element={<PedirOnline />} />
           <Route path="/acompanhar" element={<PedirOnlineAcompanhar />} />
-          <Route path="/acompanhar/:orderId" element={<PedirOnlineAcompanhar />} />
           <Route path="/garcons" element={<RequerLogin><Garcons /></RequerLogin>} />
           <Route path="/garcons/:comandaId/pedidos" element={<RequerLogin><Pedidos /></RequerLogin>} />
           <Route path="/cozinha" element={<SemAcessoGarcom><Cozinha /></SemAcessoGarcom>} />
