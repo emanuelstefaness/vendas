@@ -280,12 +280,10 @@ publicRouter.post('/orders', (req, res) => {
     valor_total: valorTotal
   });
 
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
   res.status(201).json({
-    id: orderId,
+    ...orderComItens(db, order),
     comanda_id: comandaId,
-    tipo,
-    status: 'recebido',
-    valor_total: valorTotal,
     message: tipo === 'retirada' ? 'Seu pedido estará disponível para retirada no balcão.' : 'Pedido recebido.'
   });
   } catch (err) {

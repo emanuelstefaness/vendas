@@ -9,6 +9,10 @@ import {
 
 const formatPrice = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
+function orderTemItens(order) {
+  return Array.isArray(order?.items) && order.items.length > 0
+}
+
 export default function PedidoOnlineAcompanhamento({
   orderId,
   apiBase,
@@ -19,7 +23,7 @@ export default function PedidoOnlineAcompanhamento({
 }) {
   const [order, setOrder] = useState(initialOrder)
   const [pollError, setPollError] = useState(null)
-  const [loading, setLoading] = useState(!initialOrder)
+  const [loading, setLoading] = useState(!initialOrder || !orderTemItens(initialOrder))
   const orderRef = useRef(order)
 
   useEffect(() => {
@@ -27,7 +31,8 @@ export default function PedidoOnlineAcompanhamento({
   }, [order])
 
   useEffect(() => {
-    if (!orderId || initialOrder) return undefined
+    if (!orderId) return undefined
+    if (initialOrder && orderTemItens(initialOrder)) return undefined
     let cancelled = false
 
     const fetchOrder = async () => {
@@ -131,7 +136,30 @@ export default function PedidoOnlineAcompanhamento({
           {aguardandoConfirmacao ? 'Pedido enviado!' : tituloAcompanhamento(st)}
         </h1>
         <p className="mt-2 text-slate-700">Pedido #{order.id}</p>
-        <p className="mt-1 text-xl font-bold text-slate-900">{formatPrice(order.valor_total)}</p>
+
+        {orderTemItens(order) && (
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left">
+            <p className="mb-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">Seu pedido</p>
+            <ul className="space-y-2.5">
+              {order.items.map((it, idx) => (
+                <li key={it.id ?? `${it.item_id}-${idx}`} className="flex items-start justify-between gap-3 text-sm">
+                  <div className="min-w-0 text-slate-800">
+                    <span className="font-semibold">{it.quantity}x</span>{' '}
+                    {it.item_name || 'Item'}
+                    {it.observations && (
+                      <p className="mt-0.5 text-xs leading-snug text-slate-500">{it.observations}</p>
+                    )}
+                  </div>
+                  <span className="shrink-0 font-medium text-slate-700">
+                    {formatPrice(Number(it.unit_price) * Number(it.quantity))}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <p className="mt-4 text-xl font-bold text-slate-900">Total: {formatPrice(order.valor_total)}</p>
 
         {aguardandoConfirmacao && (
           <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left">
