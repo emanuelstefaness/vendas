@@ -1,5 +1,5 @@
 /** `false` = pedidos online desligados (site mostra aviso e não aceita pedidos). */
-export const PEDIDOS_ONLINE_ATIVO = false;
+export const PEDIDOS_ONLINE_ATIVO = true;
 
 export const MENSAGEM_ONLINE_FECHADO =
   'Pedidos online indisponíveis hoje. Obrigado pela compreensão — volte em breve!';
